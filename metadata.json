@@ -1,0 +1,6 @@
+{
+  "name": "Trendlama Store & Admin",
+  "description": "An elegant e-commerce storefront with multi-category listings, full-fidelity cart checkout, order tracking, and an immersive dark-themed admin management dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
