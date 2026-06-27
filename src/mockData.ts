@@ -19,7 +19,12 @@ export const INITIAL_PRODUCTS: Product[] = [
       { name: 'pink', value: '#FDA4AF' }
     ],
     image: 'https://images.unsplash.com/photo-1581655353564-df123a1eb820?auto=format&fit=crop&q=80&w=600',
-    rating: 4.8
+    rating: 4.8,
+    salesCount: 1420,
+    reviews: [
+      { id: 'rev-1-1', userName: 'Alex Johnson', userAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100', rating: 5, comment: 'Amazing athletic shirt! Super breathable and dry.', date: '2026-05-14' },
+      { id: 'rev-1-2', userName: 'Sarah Miller', userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100', rating: 4, comment: 'Great fit, but runs slightly small around the shoulders.', date: '2026-06-02' }
+    ]
   },
   {
     id: 'prod-2',
@@ -34,7 +39,12 @@ export const INITIAL_PRODUCTS: Product[] = [
       { name: 'pink', value: '#FDA4AF' }
     ],
     image: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&q=80&w=600',
-    rating: 4.9
+    rating: 4.9,
+    salesCount: 3280,
+    reviews: [
+      { id: 'rev-2-1', userName: 'David Chen', userAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100', rating: 5, comment: 'Hands down the most comfortable running shoes I have owned.', date: '2026-06-18' },
+      { id: 'rev-2-2', userName: 'Emily Watson', userAvatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100', rating: 5, comment: 'The energy return is unreal! Feels like running on clouds.', date: '2026-06-20' }
+    ]
   },
   {
     id: 'prod-3',
@@ -50,7 +60,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       { name: 'black', value: '#1E293B' }
     ],
     image: 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&q=80&w=600',
-    rating: 4.7
+    rating: 4.7,
+    salesCount: 910,
+    reviews: [
+      { id: 'rev-3-1', userName: 'Marcus Aurelius', userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100', rating: 4, comment: 'Excellent water resistance. Kept me warm in light rain.', date: '2026-04-10' }
+    ]
   },
   {
     id: 'prod-4',
@@ -66,7 +80,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       { name: 'black', value: '#1E293B' }
     ],
     image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&q=80&w=600',
-    rating: 4.8
+    rating: 4.8,
+    salesCount: 1845,
+    reviews: [
+      { id: 'rev-4-1', userName: 'Aaliyah Jones', userAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100', rating: 5, comment: 'Heavy weight and high quality. Looks super trendy!', date: '2026-05-28' }
+    ]
   },
   {
     id: 'prod-5',
@@ -81,7 +99,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       { name: 'green', value: '#15803D' }
     ],
     image: 'https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?auto=format&fit=crop&q=80&w=600',
-    rating: 4.6
+    rating: 4.6,
+    salesCount: 730,
+    reviews: [
+      { id: 'rev-5-1', userName: 'Brandon Fox', userAvatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=100', rating: 4, comment: 'Perfect overlay for running in 40-degree weather. High zip is very nice.', date: '2026-03-15' }
+    ]
   },
   {
     id: 'prod-6',
@@ -96,7 +118,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       { name: 'green', value: '#16A34A' }
     ],
     image: 'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?auto=format&fit=crop&q=80&w=600',
-    rating: 4.5
+    rating: 4.5,
+    salesCount: 1040,
+    reviews: [
+      { id: 'rev-6-1', userName: 'Lucas Grabeel', userAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=100', rating: 5, comment: 'The denim is super durable and heavy. High-quality stitching.', date: '2026-06-11' }
+    ]
   },
   {
     id: 'prod-7',
@@ -111,7 +137,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       { name: 'white', value: '#F8FAFC' }
     ],
     image: 'https://images.unsplash.com/photo-1595950653106-6c9ebd614d3a?auto=format&fit=crop&q=80&w=600',
-    rating: 4.9
+    rating: 4.9,
+    salesCount: 4210,
+    reviews: [
+      { id: 'rev-7-1', userName: 'Ryan Reynolds', userAvatar: 'https://images.unsplash.com/photo-1531427186611-ecfd6d936c79?auto=format&fit=crop&q=80&w=100', rating: 5, comment: 'Iconic look and feel. Definitely buying another pair!', date: '2026-06-23' }
+    ]
   },
   {
     id: 'prod-8',
@@ -127,7 +157,11 @@ export const INITIAL_PRODUCTS: Product[] = [
       { name: 'green', value: '#10B981' }
     ],
     image: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&q=80&w=600',
-    rating: 4.4
+    rating: 4.4,
+    salesCount: 880,
+    reviews: [
+      { id: 'rev-8-1', userName: 'Zack Morris', userAvatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=100', rating: 4, comment: 'Good basic gym shirt. Keeps me sweat-free.', date: '2026-05-30' }
+    ]
   }
 ];
 

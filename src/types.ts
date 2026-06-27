@@ -3,6 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface ProductReview {
+  id: string;
+  userName: string;
+  userAvatar: string;
+  rating: number;
+  comment: string;
+  date: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -14,6 +23,8 @@ export interface Product {
   colors: { name: string; value: string; image?: string }[];
   image: string;
   rating?: number;
+  salesCount?: number; // How many people bought this product
+  reviews?: ProductReview[]; // Customer comments and stars
 }
 
 export interface User {
@@ -25,6 +36,10 @@ export interface User {
   role: string;
   phone?: string;
   joinedDate: string;
+  walletBalance?: number; // Wallet System
+  referralCode?: string; // Affiliate System
+  referralsCount?: number;
+  earnings?: number;
 }
 
 export interface Order {
@@ -32,7 +47,7 @@ export interface Order {
   total: number;
   status: 'success' | 'failed' | 'pending';
   date: string;
-  products: { name: string; quantity: number; size: string; color: string; price: number }[];
+  products: { name: string; quantity: number; size: string; color: string; price: number; customName?: string }[];
   address: {
     name: string;
     email: string;
@@ -47,4 +62,5 @@ export interface CartItem {
   quantity: number;
   selectedSize: string;
   selectedColor: { name: string; value: string; image?: string };
+  customName?: string;
 }

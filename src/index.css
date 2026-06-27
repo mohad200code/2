@@ -1,1 +1,77 @@
 @import "tailwindcss";
+
+/* Cyberpunk Glows, Glitch and Background effects */
+@keyframes cyber-glitch {
+  0% { transform: translate(0) }
+  20% { transform: translate(-2px, 2px) }
+  40% { transform: translate(-2px, -2px) }
+  60% { transform: translate(2px, 2px) }
+  80% { transform: translate(2px, -2px) }
+  100% { transform: translate(0) }
+}
+
+@keyframes cyber-pulse {
+  0%, 100% { opacity: 0.8; box-shadow: 0 0 15px rgba(236, 72, 153, 0.5); }
+  50% { opacity: 1; box-shadow: 0 0 30px rgba(6, 182, 212, 0.8); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(-12deg); }
+  50% { transform: translateY(-10px) rotate(-10deg); }
+}
+
+.animate-cyber-pulse {
+  animation: cyber-pulse 2.5s infinite;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.glitch-hover:hover {
+  animation: cyber-glitch 0.3s linear infinite;
+}
+
+/* Matrix scanning line grid */
+.cyber-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(244, 63, 94, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(244, 63, 94, 0.08) 1px, transparent 1px);
+}
+
+.cyber-grid-blue {
+  background-size: 30px 30px;
+  background-image: 
+    linear-gradient(to right, rgba(6, 182, 212, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(6, 182, 212, 0.08) 1px, transparent 1px);
+}
+
+/* Neon Glow Filters */
+.glow-pink {
+  box-shadow: 0 0 20px rgba(244, 63, 94, 0.6);
+}
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.6);
+}
+
+/* Custom Scrollbar for Terminals */
+.cyber-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.cyber-scroll::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.8);
+}
+.cyber-scroll::-webkit-scrollbar-thumb {
+  background: #f43f5e;
+  border-radius: 3px;
+}
+.cyber-scroll::-webkit-scrollbar-thumb:hover {
+  background: #06b6d4;
+}
+
+/* RTL layout helpers for Arabic */
+[dir="rtl"] {
+  text-align: right;
+}

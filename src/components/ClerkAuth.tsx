@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { ShieldCheck, ChevronRight, ArrowLeft, Sparkles } from 'lucide-react';
+import { ShieldCheck, ChevronRight, ArrowLeft, Sparkles, MailOpen, LockKeyhole } from 'lucide-react';
 
 // Custom high-quality vector brand icons
 const GoogleIcon = () => (
@@ -73,25 +73,212 @@ const GitHubIcon = () => (
 interface ClerkAuthProps {
   onSuccess: (email: string) => void;
   onClose: () => void;
+  onGoogleAuth?: () => void;
+  initialIsSignUp?: boolean;
+  language?: 'en' | 'zh' | 'ar';
 }
 
-export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose }) => {
-  const [email, setEmail] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [error, setError] = useState('');
+const clerkTranslations = {
+  en: {
+    verifyTitle: "Verify your Gmail",
+    verifySubtitle: "We've generated and dispatched a 6-digit security code to",
+    enterCode: "Enter Security Code",
+    activateAccount: "Activate Athlete Account",
+    verifyingCode: "Verifying Code...",
+    backToSignUp: "← Back to Sign Up",
+    createAccount: "Create your account",
+    signInToNike: "Sign in to Nike",
+    welcomeText: "Welcome! Please register or sign in with your secure athlete account or Google.",
+    socialIdentity: "Continue with Social Identity",
+    orEmailPass: "or email & password",
+    emailAddress: "Email Address",
+    password: "Password",
+    forgotPass: "Forgot Password?",
+    authenticating: "Authenticating...",
+    signUpBtn: "Sign Up Athlete",
+    signInBtn: "Sign In Athlete",
+    alreadyHaveAccount: "Already have an account?",
+    newToNike: "New to Nike's digital store?",
+    signInLink: "Sign in",
+    signUpLink: "Sign up",
+    securedBy: "Secured and powered by",
+    sandboxMode: "Developer sandbox Mode",
+    sandboxBypass: "Sandbox Bypass Active:",
+    sandboxBypassText: "Real SMTP server is not configured in workspace secrets. Enter this code to bypass & register instantly:",
+    copyCode: "Copy Code",
+    emailRequired: "Email address is required",
+    emailValid: "Please enter a valid email address",
+    passwordRequired: "Password is required",
+    passwordLength: "Password must be at least 6 characters long",
+    otpRequired: "Please enter a valid 6-digit verification code."
+  },
+  zh: {
+    verifyTitle: "验证您的电子邮箱",
+    verifySubtitle: "我们已生成一个6位数安全码并发送至",
+    enterCode: "输入安全码",
+    activateAccount: "激活运动员账户",
+    verifyingCode: "正在验证代码...",
+    backToSignUp: "← 返回注册",
+    createAccount: "创建您的账户",
+    signInToNike: "登录到 Nike",
+    welcomeText: "欢迎！请使用您的运动员安全账户或谷歌账号注册或登录。",
+    socialIdentity: "继续使用社交身份登录",
+    orEmailPass: "或使用电子邮箱和密码",
+    emailAddress: "电子邮箱地址",
+    password: "密码",
+    forgotPass: "忘记密码？",
+    authenticating: "正在验证...",
+    signUpBtn: "注册运动员",
+    signInBtn: "登录运动员",
+    alreadyHaveAccount: "已经有账户？",
+    newToNike: "第一次来到耐克数码商城？",
+    signInLink: "登录",
+    signUpLink: "注册",
+    securedBy: "安全保障由...提供",
+    sandboxMode: "开发者沙盒模式",
+    sandboxBypass: "沙盒旁路激活：",
+    sandboxBypassText: "真实的 SMTP 服务器未在工作区密钥中配置。输入此代码以立即绕过并注册：",
+    copyCode: "复制代码",
+    emailRequired: "电子邮件地址是必需的",
+    emailValid: "请输入有效的电子邮件地址",
+    passwordRequired: "密码是必需的",
+    passwordLength: "密码长度必须至少为6个字符",
+    otpRequired: "请输入有效的6位验证码。"
+  },
+  ar: {
+    verifyTitle: "تحقق من بريدك الإلكتروني",
+    verifySubtitle: "لقد قمنا بتوليد وإرسال رمز أمان مكون من 6 أرقام إلى",
+    enterCode: "أدخل رمز الأمان",
+    activateAccount: "تفعيل حساب الرياضي",
+    verifyingCode: "جاري التحقق من الرمز...",
+    backToSignUp: "← العودة إلى التسجيل",
+    createAccount: "أنشئ حسابك الخاص",
+    signInToNike: "سجل الدخول إلى نايكي",
+    welcomeText: "مرحباً بك! يرجى التسجيل أو تسجيل الدخول بحساب الرياضي الآمن الخاص بك أو عبر جوجل.",
+    socialIdentity: "المتابعة باستخدام الهوية الاجتماعية",
+    orEmailPass: "أو البريد الإلكتروني وكلمة المرور",
+    emailAddress: "البريد الإلكتروني",
+    password: "كلمة المرور",
+    forgotPass: "هل نسيت كلمة المرور؟",
+    authenticating: "جاري التحقق والمصادقة...",
+    signUpBtn: "تسجيل رياضي جديد",
+    signInBtn: "تسجيل دخول الرياضي",
+    alreadyHaveAccount: "هل لديك حساب بالفعل؟",
+    newToNike: "جديد في متجر نايكي الرقمي؟",
+    signInLink: "تسجيل الدخول",
+    signUpLink: "إنشاء حساب",
+    securedBy: "مؤمن ومدعوم بواسطة",
+    sandboxMode: "وضع المطور التجريبي",
+    sandboxBypass: "تجاوز الوضع التجريبي نشط:",
+    sandboxBypassText: "خادم SMTP الحقيقي غير مهيأ في أسرار مساحة العمل. أدخل هذا الرمز للتجاوز والتسجيل فوراً:",
+    copyCode: "نسخ الرمز",
+    emailRequired: "البريد الإلكتروني مطلوب",
+    emailValid: "يرجى إدخل بريد إلكتروني صحيح",
+    passwordRequired: "كلمة المرور مطلوبة",
+    passwordLength: "يجب أن تتكون كلمة المرور من 6 أحرف على الأقل",
+    otpRequired: "يرجى إدخال رمز تحقق صالح مكون من 6 أرقام."
+  }
+};
 
-  const handleSubmit = (e: React.FormEvent) => {
+export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoogleAuth, initialIsSignUp = false, language = 'en' }) => {
+  const t = clerkTranslations[language];
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(initialIsSignUp);
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Email verification (OTP) States
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSentTo, setOtpSentTo] = useState('');
+  const [debugOtp, setDebugOtp] = useState<string | undefined>(undefined);
+  const [isOtpSimulated, setIsOtpSimulated] = useState(true);
+  const [otpError, setOtpError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) {
-      setError('Email address is required');
+      setError(t.emailRequired);
       return;
     }
     if (!/\S+@\S+\.\S+/.test(email)) {
-      setError('Please enter a valid email address');
+      setError(t.emailValid);
       return;
     }
+    if (!password) {
+      setError(t.passwordRequired);
+      return;
+    }
+    if (password.length < 6) {
+      setError(t.passwordLength);
+      return;
+    }
+
     setError('');
-    onSuccess(email);
+    setIsLoading(true);
+
+    try {
+      const endpoint = isSignUp ? '/api/auth/signup' : '/api/auth/login';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Authentication failed. Please check your credentials.');
+      }
+
+      if (isSignUp && data.pendingVerification) {
+        // Transition to Verification state
+        setIsVerifyingOtp(true);
+        setOtpSentTo(data.email || email);
+        setDebugOtp(data.debugCode);
+        setIsOtpSimulated(!!data.isSimulated);
+        setError('');
+      } else {
+        onSuccess(data.email || email);
+      }
+    } catch (err: any) {
+      console.error('[AUTH SUBMIT ERROR]', err);
+      setError(err.message || 'Server connection timed out.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode || otpCode.trim().length !== 6) {
+      setOtpError(t.otpRequired);
+      return;
+    }
+
+    setOtpError('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('/api/auth/verify-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: otpSentTo, code: otpCode.trim() }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Incorrect verification code. Please try again.');
+      }
+
+      onSuccess(otpSentTo);
+    } catch (err: any) {
+      console.error('[OTP VERIFY ERROR]', err);
+      setOtpError(err.message || 'Verification connection timed out.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const socialLogins = [
@@ -182,106 +369,242 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose }) => {
         </button>
 
         <div id="clerk-auth-card" className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-8 md:p-10 flex flex-col transition-all">
-          <div className="text-center pb-6">
-            <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-xl font-black mx-auto mb-4 shadow-md">
-              N
-            </div>
-            <h2 id="clerk-title" className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              {isSignUp ? 'Create your account' : 'Sign in to Nike'}
-            </h2>
-            <p id="clerk-subtitle" className="text-xs text-slate-500 mt-1.5 font-medium">
-              Welcome! Please {isSignUp ? 'register' : 'sign in'} with one of our authentication partners or your email.
-            </p>
-          </div>
-
-          <div className="space-y-6">
-            
-            {/* Social Logins Grid - Crisp SVG Logos with light-styled buttons */}
-            <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center mb-3">
-                Continue with Social Identity
-              </p>
-              <div id="clerk-socials" className="grid grid-cols-3 gap-2.5">
-                {socialLogins.map((social) => (
-                  <button
-                    key={social.name}
-                    id={`social-${social.name.toLowerCase()}`}
-                    type="button"
-                    onClick={() => onSuccess(`${social.name.toLowerCase()}user@gmail.com`)}
-                    className="py-3 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center transition-all hover:shadow-sm duration-150 cursor-pointer active:scale-95"
-                    title={`Continue with ${social.name}`}
-                  >
-                    <span className="flex items-center justify-center">{social.icon}</span>
-                  </button>
-                ))}
+          {isVerifyingOtp ? (
+            <div className="space-y-6">
+              <div className="text-center pb-4">
+                <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-xl font-black mx-auto mb-4 shadow-md shadow-indigo-100 animate-bounce">
+                  <MailOpen className="w-6 h-6" />
+                </div>
+                <h2 id="verify-title" className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                  {t.verifyTitle}
+                </h2>
+                <p id="verify-subtitle" className="text-xs text-slate-500 mt-1.5 font-medium leading-relaxed">
+                  {t.verifySubtitle} <strong className="text-slate-800">{otpSentTo}</strong>.
+                </p>
               </div>
-            </div>
 
-            {/* Separator */}
-            <div className="flex items-center justify-center gap-3">
-              <div className="h-px bg-slate-200 flex-1"></div>
-              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">or email auth</span>
-              <div className="h-px bg-slate-200 flex-1"></div>
-            </div>
+              <form id="clerk-otp-form" onSubmit={handleOtpSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block text-center">
+                    {t.enterCode}
+                  </label>
+                  <input
+                    id="clerk-otp-input"
+                    type="text"
+                    maxLength={6}
+                    placeholder="••••••"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                    className="w-full px-4 py-3.5 text-center tracking-[0.5em] font-mono text-xl bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:border-slate-800 outline-none text-slate-800 transition-all shadow-inner focus:shadow-none"
+                    disabled={isLoading}
+                    autoFocus
+                  />
+                  {otpError && (
+                    <p id="clerk-otp-error" className="text-xs text-rose-500 font-semibold text-center mt-1">
+                      {otpError}
+                    </p>
+                  )}
+                </div>
 
-            {/* Email input form */}
-            <form id="clerk-form" onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  Email Address
-                </label>
-                <input
-                  id="clerk-email-input"
-                  type="email"
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-4 py-3 bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:border-slate-800 outline-none text-sm text-slate-800 transition-all shadow-inner focus:shadow-none"
-                />
-                {error && (
-                  <p id="clerk-email-error" className="text-xs text-rose-500 font-semibold mt-1">
-                    {error}
-                  </p>
+                {debugOtp && (
+                  <div className="bg-indigo-50 border border-indigo-150 rounded-2xl p-4 text-xs text-indigo-700 space-y-1.5 leading-relaxed">
+                    <span className="font-bold flex items-center gap-1.5 text-indigo-800">
+                      <LockKeyhole className="w-3.5 h-3.5" /> {t.sandboxBypass}
+                    </span>
+                    <p>{t.sandboxBypassText}</p>
+                    <div className="flex items-center justify-between bg-white border border-indigo-200 px-3 py-2 rounded-xl font-mono text-sm font-black text-indigo-950 mt-1 select-all shadow-sm">
+                      <span>{debugOtp}</span>
+                      <span className="text-[9px] text-indigo-500 font-sans uppercase tracking-wider font-bold">{t.copyCode}</span>
+                    </div>
+                  </div>
                 )}
-              </div>
+
+                <button
+                  id="clerk-verify-btn"
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] disabled:opacity-50 text-xs uppercase tracking-wider"
+                >
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      {t.verifyingCode}
+                    </span>
+                  ) : (
+                    <>
+                      <span>{t.activateAccount}</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </form>
 
               <button
-                id="clerk-submit-btn"
-                type="submit"
-                className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-lg shadow-slate-900/10 hover:shadow-slate-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                type="button"
+                onClick={() => {
+                  setIsVerifyingOtp(false);
+                  setOtpCode('');
+                  setOtpError('');
+                }}
+                className="w-full text-center text-xs text-slate-500 hover:text-slate-800 font-bold hover:underline cursor-pointer mt-2"
               >
-                <span className="tracking-wide text-sm font-bold">Continue with Email</span>
-                <ChevronRight className="w-4 h-4" />
+                {t.backToSignUp}
               </button>
-            </form>
-
-            {/* Mode toggling text */}
-            <div className="text-center pt-2">
-              <p id="clerk-toggle-mode" className="text-xs text-slate-500 font-medium">
-                {isSignUp ? 'Already have an account?' : "New to Nike's digital store?"}{' '}
-                <span
-                  onClick={() => {
-                    setIsSignUp(!isSignUp);
-                    setError('');
-                  }}
-                  className="text-indigo-600 font-extrabold underline cursor-pointer hover:text-indigo-800 ml-1"
-                >
-                  {isSignUp ? 'Sign in' : 'Sign up'}
-                </span>
-              </p>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="text-center pb-6">
+                <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-xl font-black mx-auto mb-4 shadow-md">
+                  N
+                </div>
+                <h2 id="clerk-title" className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                  {isSignUp ? t.createAccount : t.signInToNike}
+                </h2>
+                <p id="clerk-subtitle" className="text-xs text-slate-500 mt-1.5 font-medium">
+                  {t.welcomeText}
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                
+                {/* Social Logins Grid - Crisp SVG Logos with light-styled buttons */}
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center mb-3">
+                    {t.socialIdentity}
+                  </p>
+                  <div id="clerk-socials" className="grid grid-cols-3 gap-2.5">
+                    {socialLogins.map((social) => (
+                      <button
+                        key={social.name}
+                        id={`social-${social.name.toLowerCase()}`}
+                        type="button"
+                        onClick={() => {
+                          if (social.name === 'Google' && onGoogleAuth) {
+                            onGoogleAuth();
+                          } else {
+                            onSuccess(`${social.name.toLowerCase()}user@gmail.com`);
+                          }
+                        }}
+                        className="py-3 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center transition-all hover:shadow-sm duration-150 cursor-pointer active:scale-95 group/btn"
+                        title={social.name === 'Google' ? "Connect real Google account" : `Continue with simulated ${social.name}`}
+                      >
+                        <span className="flex items-center justify-center relative">
+                          {social.icon}
+                          {social.name === 'Google' && (
+                            <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Separator */}
+                <div className="flex items-center justify-center gap-3">
+                  <div className="h-px bg-slate-200 flex-1"></div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">{t.orEmailPass}</span>
+                  <div className="h-px bg-slate-200 flex-1"></div>
+                </div>
+
+                {/* Email input form */}
+                <form id="clerk-form" onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      {t.emailAddress}
+                    </label>
+                    <input
+                      id="clerk-email-input"
+                      type="email"
+                      placeholder="name@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:border-slate-800 outline-none text-sm text-slate-800 transition-all shadow-inner focus:shadow-none"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        {t.password}
+                      </label>
+                      {!isSignUp && (
+                        <span className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer">
+                          {t.forgotPass}
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      id="clerk-password-input"
+                      type="password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:border-slate-800 outline-none text-sm text-slate-800 transition-all shadow-inner focus:shadow-none"
+                      disabled={isLoading}
+                    />
+                    
+                    {error && (
+                      <p id="clerk-email-error" className="text-xs text-rose-500 font-semibold mt-1">
+                        {error}
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    id="clerk-submit-btn"
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-lg shadow-slate-900/10 hover:shadow-slate-900/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {isLoading ? (
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                        {t.authenticating}
+                      </span>
+                    ) : (
+                      <>
+                        <span className="tracking-wide text-sm font-bold">
+                          {isSignUp ? t.signUpBtn : t.signInBtn}
+                        </span>
+                        <ChevronRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* Mode toggling text */}
+                <div className="text-center pt-2">
+                  <p id="clerk-toggle-mode" className="text-xs text-slate-500 font-medium">
+                    {isSignUp ? t.alreadyHaveAccount : t.newToNike}{' '}
+                    <span
+                      onClick={() => {
+                        setIsSignUp(!isSignUp);
+                        setError('');
+                      }}
+                      className="text-indigo-600 font-extrabold underline cursor-pointer hover:text-indigo-800 ml-1"
+                    >
+                      {isSignUp ? t.signInLink : t.signUpLink}
+                    </span>
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Security & Verification Badging */}
           <div className="mt-8 pt-5 border-t border-slate-100 text-center flex flex-col items-center gap-1.5">
             <p className="text-[11px] text-slate-400 flex items-center gap-1.5 justify-center">
-              <span>Secured and powered by</span>
+              <span>{t.securedBy}</span>
               <span className="font-extrabold text-slate-700 flex items-center gap-0.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-indigo-500 fill-indigo-50/50" /> clerk
               </span>
             </p>
             <p id="clerk-dev-mode" className="text-[9px] text-amber-700 font-bold uppercase tracking-wider bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-100">
-              Developer sandbox Mode
+              {t.sandboxMode}
             </p>
           </div>
         </div>

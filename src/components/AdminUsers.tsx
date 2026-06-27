@@ -15,6 +15,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ShieldAlert,
+  UserPlus,
+  X,
+  Upload,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -30,10 +33,11 @@ import { User as UserType } from '../types';
 interface AdminUsersProps {
   users: UserType[];
   onDeleteUsers: (ids: string[]) => void;
+  onAddUser: (newUser: UserType) => void;
   onToast: (msg: string, type: 'success' | 'error') => void;
 }
 
-export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, onToast }) => {
+export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, onAddUser, onToast }) => {
   const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [sortField, setSortField] = useState<'email' | null>(null);
@@ -48,6 +52,67 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
 
   // Active Row Actions Dropdown
   const [activeRowId, setActiveRowId] = useState<string | null>(null);
+
+  // Add User Dialog State
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPhone, setNewUserPhone] = useState('');
+  const [newUserAvatar, setNewUserAvatar] = useState('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100');
+  const [newUserStatus, setNewUserStatus] = useState<'active' | 'banned'>('active');
+  const [newUserRole, setNewUserRole] = useState('user');
+  const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
+
+  const handleAvatarUploadFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      onToast('Invalid format! Please upload an image file.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result;
+      if (typeof result === 'string') {
+        setNewUserAvatar(result);
+        onToast('Image uploaded successfully!', 'success');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAddUserSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUsername.trim()) {
+      onToast('Username is required!', 'error');
+      return;
+    }
+    if (!newUserEmail.trim()) {
+      onToast('Email is required!', 'error');
+      return;
+    }
+
+    const newUser: UserType = {
+      id: `usr-${Date.now()}`,
+      username: newUsername.trim(),
+      email: newUserEmail.trim(),
+      avatar: newUserAvatar.trim(),
+      status: newUserStatus,
+      role: newUserRole,
+      phone: newUserPhone.trim() || undefined,
+      joinedDate: new Date().toLocaleDateString()
+    };
+
+    onAddUser(newUser);
+    onToast(`Successfully created profile for ${newUser.username}!`, 'success');
+
+    // Reset Form
+    setNewUsername('');
+    setNewUserEmail('');
+    setNewUserPhone('');
+    setNewUserAvatar('https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100');
+    setNewUserStatus('active');
+    setNewUserRole('user');
+    setIsAddUserOpen(false);
+  };
 
   // Filter & Search users
   const filteredUsers = useMemo(() => {
@@ -232,22 +297,32 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
   }
 
   return (
-    <div id="admin-users-panel" className="space-y-4 font-sans text-white">
+    <div id="admin-users-panel" className="space-y-4 font-sans text-white relative">
       {/* Search & Actions control panel */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-4.5 h-4.5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            id="user-search-input"
-            type="text"
-            placeholder="Search users by name or email..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:border-indigo-400 outline-none"
-          />
+        <div className="flex flex-1 items-center gap-3 max-w-md">
+          <div className="relative flex-1">
+            <Search className="w-4.5 h-4.5 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              id="user-search-input"
+              type="text"
+              placeholder="Search users by name or email..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:border-indigo-400 outline-none"
+            />
+          </div>
+          <button
+            id="add-profile-trigger-btn"
+            onClick={() => setIsAddUserOpen(true)}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 transition-all hover:scale-105 cursor-pointer shrink-0"
+          >
+            <UserPlus className="w-4.5 h-4.5" />
+            <span>Add Profile</span>
+          </button>
         </div>
 
         {/* Sliding red delete button */}
@@ -262,6 +337,190 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
           </button>
         )}
       </div>
+
+      {/* CREATE NEW PROFILE DIALOG OVERLAY */}
+      {isAddUserOpen && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl p-6 font-sans text-xs text-slate-200 space-y-6 shadow-2xl relative">
+            
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <UserPlus className="w-5 h-5" />
+                <h3 className="font-black text-sm uppercase tracking-wider">Create New Profile</h3>
+              </div>
+              <button 
+                onClick={() => setIsAddUserOpen(false)}
+                className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddUserSubmit} className="space-y-4">
+              
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Username</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="E.g., Mohab Mohnad"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="mohabmohnad9@gmail.com"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Phone Number (Optional)</label>
+                <input
+                  type="tel"
+                  placeholder="+1 (555) 019-2834"
+                  value={newUserPhone}
+                  onChange={(e) => setNewUserPhone(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Status</label>
+                  <select
+                    value={newUserStatus}
+                    onChange={(e) => setNewUserStatus(e.target.value as 'active' | 'banned')}
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white cursor-pointer"
+                  >
+                    <option value="active">Active</option>
+                    <option value="banned">Banned</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Account Role</label>
+                  <select
+                    value={newUserRole}
+                    onChange={(e) => setNewUserRole(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white cursor-pointer"
+                  >
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Avatar Selector section */}
+              <div className="space-y-3">
+                <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Profile Image / Avatar</label>
+                
+                {/* Active preview & Presets row */}
+                <div className="flex items-center gap-4 bg-slate-800/40 p-3 rounded-2xl border border-slate-800">
+                  <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-emerald-500/50 shrink-0 shadow-lg">
+                    <img src={newUserAvatar} alt="Current selection" className="w-full h-full object-cover" />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[9px] uppercase font-black text-emerald-400 tracking-widest block">Selected Avatar</span>
+                    <div className="flex gap-1.5">
+                      {[
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100', // Female Athlete
+                        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100', // Male Runner
+                        'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100', // Cyber Runner
+                        'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100'  // Athlete Leader
+                      ].map((url, idx) => {
+                        const isSelected = newUserAvatar === url;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setNewUserAvatar(url)}
+                            className={`w-7 h-7 rounded-lg overflow-hidden border cursor-pointer transition-all ${
+                              isSelected ? 'border-emerald-400 scale-105' : 'border-slate-800 opacity-60 hover:opacity-100'
+                            }`}
+                          >
+                            <img src={url} alt={`preset-${idx}`} className="w-full h-full object-cover" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Local browser file uploader with drag & drop */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingAvatar(true);
+                  }}
+                  onDragLeave={() => setIsDraggingAvatar(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingAvatar(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) handleAvatarUploadFile(file);
+                  }}
+                  onClick={() => document.getElementById('admin-avatar-file-input')?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
+                    isDraggingAvatar 
+                      ? 'border-emerald-400 bg-emerald-500/10' 
+                      : 'border-slate-800 hover:border-emerald-500 bg-slate-800/30 hover:bg-slate-800/60'
+                  }`}
+                >
+                  <input
+                    id="admin-avatar-file-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleAvatarUploadFile(file);
+                    }}
+                    className="hidden"
+                  />
+                  <Upload className="w-6 h-6 text-slate-500 mx-auto mb-1" />
+                  <p className="text-[10px] font-bold text-slate-300">Drag & Drop profile photo</p>
+                  <p className="text-[9px] text-slate-500">or click to browse from your device</p>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[9px] text-slate-500 block">Or paste custom image URL:</span>
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/photo-..."
+                    value={newUserAvatar}
+                    onChange={(e) => setNewUserAvatar(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-850 border border-slate-700 focus:border-emerald-500 rounded-lg outline-none text-[10px] text-slate-300 animate-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-colors cursor-pointer text-xs"
+                >
+                  Create Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddUserOpen(false)}
+                  className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl cursor-pointer text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Users table */}
       <div id="users-table-card" className="bg-slate-800 rounded-2xl border border-slate-700 shadow-xl overflow-hidden">
