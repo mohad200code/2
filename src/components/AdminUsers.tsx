@@ -340,19 +340,19 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
 
       {/* CREATE NEW PROFILE DIALOG OVERLAY */}
       {isAddUserOpen && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl p-6 font-sans text-xs text-slate-200 space-y-6 shadow-2xl relative">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-[#0d121f] border border-slate-800/80 rounded-[24px] p-6 font-sans text-xs text-slate-200 space-y-5 shadow-2xl relative my-8">
             
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-800/60 pb-3">
               <div className="flex items-center gap-2 text-emerald-400">
                 <UserPlus className="w-5 h-5" />
-                <h3 className="font-black text-sm uppercase tracking-wider">Create New Profile</h3>
+                <h3 className="font-extrabold text-xs uppercase tracking-wider text-emerald-400">Create New Profile</h3>
               </div>
               <button 
                 onClick={() => setIsAddUserOpen(false)}
-                className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-full cursor-pointer"
+                className="w-7 h-7 flex items-center justify-center bg-slate-800/60 hover:bg-slate-700/80 text-slate-400 hover:text-white rounded-full cursor-pointer transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -366,7 +366,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                   placeholder="E.g., Mohab Mohnad"
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
+                  className="w-full px-4 py-3 bg-[#131926] border border-[#1e293b] focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
                 />
               </div>
 
@@ -378,7 +378,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                   placeholder="mohabmohnad9@gmail.com"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
+                  className="w-full px-4 py-3 bg-[#131926] border border-[#1e293b] focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
                 />
               </div>
 
@@ -386,10 +386,10 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                 <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Phone Number (Optional)</label>
                 <input
                   type="tel"
-                  placeholder="+1 (555) 019-2834"
+                  placeholder="123456789"
                   value={newUserPhone}
                   onChange={(e) => setNewUserPhone(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
+                  className="w-full px-4 py-3 bg-[#131926] border border-[#1e293b] focus:border-emerald-500 rounded-xl outline-none text-xs text-white"
                 />
               </div>
 
@@ -399,7 +399,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                   <select
                     value={newUserStatus}
                     onChange={(e) => setNewUserStatus(e.target.value as 'active' | 'banned')}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white cursor-pointer"
+                    className="w-full px-4 py-3 bg-[#131926] border border-[#1e293b] focus:border-emerald-500 rounded-xl outline-none text-xs text-white cursor-pointer"
                   >
                     <option value="active">Active</option>
                     <option value="banned">Banned</option>
@@ -411,7 +411,7 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                   <select
                     value={newUserRole}
                     onChange={(e) => setNewUserRole(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-xl outline-none text-xs text-white cursor-pointer"
+                    className="w-full px-4 py-3 bg-[#131926] border border-[#1e293b] focus:border-emerald-500 rounded-xl outline-none text-xs text-white cursor-pointer"
                   >
                     <option value="user">User</option>
                     <option value="admin">Admin</option>
@@ -424,13 +424,13 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                 <label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Profile Image / Avatar</label>
                 
                 {/* Active preview & Presets row */}
-                <div className="flex items-center gap-4 bg-slate-800/40 p-3 rounded-2xl border border-slate-800">
-                  <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-emerald-500/50 shrink-0 shadow-lg">
+                <div className="flex items-center gap-4 bg-[#131926]/40 p-3 rounded-2xl border border-[#1e293b]/60">
+                  <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-emerald-500 shrink-0 shadow-lg shadow-emerald-500/10">
                     <img src={newUserAvatar} alt="Current selection" className="w-full h-full object-cover" />
                   </div>
                   <div className="space-y-1">
-                    <span className="text-[9px] uppercase font-black text-emerald-400 tracking-widest block">Selected Avatar</span>
-                    <div className="flex gap-1.5">
+                    <span className="text-[9px] uppercase font-bold text-emerald-400 tracking-wider block">Selected Avatar</span>
+                    <div className="flex gap-2">
                       {[
                         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100', // Female Athlete
                         'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100', // Male Runner
@@ -443,8 +443,8 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                             key={idx}
                             type="button"
                             onClick={() => setNewUserAvatar(url)}
-                            className={`w-7 h-7 rounded-lg overflow-hidden border cursor-pointer transition-all ${
-                              isSelected ? 'border-emerald-400 scale-105' : 'border-slate-800 opacity-60 hover:opacity-100'
+                            className={`w-7 h-7 rounded-full overflow-hidden border cursor-pointer transition-all ${
+                              isSelected ? 'border-emerald-400 scale-105' : 'border-[#1e293b] opacity-60 hover:opacity-100'
                             }`}
                           >
                             <img src={url} alt={`preset-${idx}`} className="w-full h-full object-cover" />
@@ -469,10 +469,10 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                     if (file) handleAvatarUploadFile(file);
                   }}
                   onClick={() => document.getElementById('admin-avatar-file-input')?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
+                  className={`border border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
                     isDraggingAvatar 
                       ? 'border-emerald-400 bg-emerald-500/10' 
-                      : 'border-slate-800 hover:border-emerald-500 bg-slate-800/30 hover:bg-slate-800/60'
+                      : 'border-[#1e293b] hover:border-emerald-500 bg-[#131926]/30 hover:bg-[#131926]/60'
                   }`}
                 >
                   <input
@@ -494,25 +494,25 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                   <span className="text-[9px] text-slate-500 block">Or paste custom image URL:</span>
                   <input
                     type="url"
-                    placeholder="https://images.unsplash.com/photo-..."
+                    placeholder="data:image/jpeg;base64,/9j/4AAQSk..."
                     value={newUserAvatar}
                     onChange={(e) => setNewUserAvatar(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-850 border border-slate-700 focus:border-emerald-500 rounded-lg outline-none text-[10px] text-slate-300 animate-none"
+                    className="w-full px-3 py-2.5 bg-[#131926] border border-[#1e293b] focus:border-emerald-500 rounded-lg outline-none text-[10px] text-slate-300 animate-none"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-3 border-t border-slate-800">
+              <div className="flex gap-3 pt-3 border-t border-slate-800/60">
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg transition-colors cursor-pointer text-xs"
+                  className="flex-[3] py-3 bg-[#059669] hover:bg-[#047857] text-white font-bold rounded-2xl shadow-lg transition-colors cursor-pointer text-xs"
                 >
                   Create Profile
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsAddUserOpen(false)}
-                  className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl cursor-pointer text-xs"
+                  className="flex-[1] py-3 bg-[#1e293b] hover:bg-[#2d3748] text-slate-300 font-bold rounded-2xl cursor-pointer text-xs"
                 >
                   Cancel
                 </button>

@@ -24,7 +24,17 @@ export interface Product {
   image: string;
   rating?: number;
   salesCount?: number; // How many people bought this product
+  stock?: number; // Real-time inventory tracking level
   reviews?: ProductReview[]; // Customer comments and stars
+  name_en?: string;
+  name_zh?: string;
+  name_ar?: string;
+  short_en?: string;
+  short_zh?: string;
+  short_ar?: string;
+  desc_en?: string;
+  desc_zh?: string;
+  desc_ar?: string;
 }
 
 export interface User {
@@ -47,7 +57,7 @@ export interface Order {
   total: number;
   status: 'success' | 'failed' | 'pending';
   date: string;
-  products: { name: string; quantity: number; size: string; color: string; price: number; customName?: string }[];
+  products: { name: string; quantity: number; size: string; color: string; price: number; customName?: string; image?: string }[];
   address: {
     name: string;
     email: string;

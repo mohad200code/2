@@ -75,3 +75,15 @@
 [dir="rtl"] {
   text-align: right;
 }
+
+/* Toast Progress Animation */
+@keyframes toast-progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+.animate-toast-progress {
+  animation: toast-progress 4s linear forwards;
+}
+
+/* Elegant, solid pure black text for maximum readability in Day Mode */
+

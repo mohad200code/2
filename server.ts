@@ -6,8 +6,32 @@ import fs from "fs";
 import crypto from "crypto";
 import Stripe from "stripe";
 import nodemailer from "nodemailer";
+import http from "http";
+import { WebSocketServer, WebSocket } from "ws";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
+
+// Lazy Gemini API initialization to prevent crash on startup if key is missing
+let genAI: GoogleGenAI | null = null;
+function getGenAI(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn("GEMINI_API_KEY environment variable is missing. Running in simulated fallback mode.");
+    return null;
+  }
+  if (!genAI) {
+    genAI = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+  }
+  return genAI;
+}
 
 // Lazy Stripe initialization to prevent crash when key is missing on startup
 let stripeClient: Stripe | null = null;
@@ -44,6 +68,14 @@ interface PendingUser {
 }
 const pendingUsers = new Map<string, PendingUser>();
 
+interface PendingLogin {
+  email: string;
+  role: string;
+  code: string;
+  expiresAt: number;
+}
+const pendingLogins = new Map<string, PendingLogin>();
+
 // Helper to send real verification email via SMTP if configured, with graceful simulated fallback
 async function sendVerificationEmail(toEmail: string, code: string): Promise<{ success: boolean; error?: string; isSimulated: boolean }> {
   const smtpHost = process.env.SMTP_HOST || "smtp.gmail.com";
@@ -67,7 +99,7 @@ async function sendVerificationEmail(toEmail: string, code: string): Promise<{ s
       },
     });
 
-    const emailSubject = `🔐 Nike Cyberport Verification Code: ${code}`;
+    const emailSubject = `🔐 Sdazum Cyberport Verification Code: ${code}`;
     const emailBody = `
 <!DOCTYPE html>
 <html>
@@ -83,13 +115,13 @@ async function sendVerificationEmail(toEmail: string, code: string): Promise<{ s
           <tr>
             <td style="background-color: #1e1b4b; padding: 24px; border-bottom: 2px solid #ec4899; text-align: center;">
               <span style="font-size: 10px; font-weight: 900; letter-spacing: 0.2em; color: #ec4899; font-family: monospace; display: block; margin-bottom: 8px;">SECURITY VERIFICATION SYSTEM</span>
-              <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; text-transform: uppercase;">NIKE CYBERPORT</h1>
+              <h1 style="margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; text-transform: uppercase;">SDAZUM CYBERPORT</h1>
             </td>
           </tr>
           <tr>
             <td style="padding: 30px; text-align: center;">
               <p style="margin-top: 0; font-size: 15px; line-height: 1.6; color: #cbd5e1; text-align: left;">
-                Welcome to Nike Cyberport! 
+                Welcome to Sdazum Cyberport! 
               </p>
               <p style="font-size: 14px; line-height: 1.6; color: #94a3b8; text-align: left; margin-bottom: 24px;">
                 To complete your sign-up process and secure your account as a verified athlete, please input the 6-digit verification code below:
@@ -115,7 +147,7 @@ async function sendVerificationEmail(toEmail: string, code: string): Promise<{ s
     `;
 
     await transporter.sendMail({
-      from: `"Nike Cyberport" <${smtpUser}>`,
+      from: `"Sdazum Cyberport" <${smtpUser}>`,
       to: toEmail,
       subject: emailSubject,
       html: emailBody,
@@ -148,9 +180,17 @@ function validateLuhn(cardNumber: string): boolean {
   return sum % 10 === 0;
 }
 
+// Helper to resolve directory for persistence databases, supporting packaged binary environments (.exe)
+const getDbDir = () => {
+  if ((process as any).pkg) {
+    return path.dirname(process.execPath);
+  }
+  return process.cwd();
+};
+
 // Initialize Local JSON Databases if they do not exist
-const USERS_DB_PATH = path.join(process.cwd(), "users_db.json");
-const PAYMENTS_DB_PATH = path.join(process.cwd(), "payments_db.json");
+const USERS_DB_PATH = path.join(getDbDir(), "users_db.json");
+const PAYMENTS_DB_PATH = path.join(getDbDir(), "payments_db.json");
 
 if (!fs.existsSync(USERS_DB_PATH)) {
   const seedUsers = [
@@ -274,6 +314,7 @@ app.post("/api/auth/verify-signup", (req, res) => {
     const newAthlete = {
       email: emailLower,
       passwordHash: pending.passwordHash,
+      role: "admin",
       createdAt: new Date().toISOString()
     };
 
@@ -284,7 +325,7 @@ app.post("/api/auth/verify-signup", (req, res) => {
     pendingUsers.delete(emailLower);
 
     console.log(`[AUTH VERIFIED SUCCESS] New athlete verified & registered: ${emailLower}`);
-    return res.json({ success: true, email: emailLower });
+    return res.json({ success: true, email: emailLower, role: "admin" });
 
   } catch (error: any) {
     console.error("[VERIFY SIGNUP ERROR]", error);
@@ -292,8 +333,8 @@ app.post("/api/auth/verify-signup", (req, res) => {
   }
 });
 
-// Real Login Endpoint
-app.post("/api/auth/login", (req, res) => {
+// Real Login Endpoint (Now supports 2-Factor Authentication via Gmail Code)
+app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -308,21 +349,85 @@ app.post("/api/auth/login", (req, res) => {
     }
 
     const emailLower = email.toLowerCase();
-    const targetUser = users.find((u: any) => u.email === emailLower);
-    if (!targetUser) {
-      return res.status(401).json({ error: "Invalid email or password." });
-    }
-
+    let targetUser = users.find((u: any) => u.email === emailLower);
     const inputHash = hashPassword(password);
-    if (targetUser.passwordHash !== inputHash) {
-      return res.status(401).json({ error: "Invalid email or password." });
+
+    if (!targetUser) {
+      return res.status(400).json({ error: "No account found with this email. Please sign up first." });
     }
 
-    console.log(`[AUTH SUCCESS] Athlete logged in: ${emailLower}`);
-    return res.json({ success: true, email: emailLower });
+    if (targetUser.passwordHash !== inputHash) {
+      return res.status(400).json({ error: "Incorrect password. Please try again." });
+    }
+
+    // Generate a 6-digit login verification code
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const userRole = targetUser.role || (emailLower === "mohabmohnad9@gmail.com" ? "admin" : "user");
+
+    // Store in-memory with 15-minute expiration
+    pendingLogins.set(emailLower, {
+      email: emailLower,
+      role: userRole,
+      code,
+      expiresAt: Date.now() + 15 * 60 * 1000
+    });
+
+    console.log(`[AUTH LOGIN CODE] Verification code ${code} generated for login: ${emailLower}`);
+
+    // Try to dispatch real email to their Gmail address
+    const emailResult = await sendVerificationEmail(emailLower, code);
+
+    return res.json({
+      success: true,
+      pendingVerification: true,
+      email: emailLower,
+      isSimulated: emailResult.isSimulated,
+      // Pass the debug code so user can register if SMTP is not yet configured in local workspace environment secrets
+      debugCode: emailResult.isSimulated ? code : undefined,
+      message: emailResult.isSimulated
+        ? "Login verification code generated in Sandbox Mode."
+        : `A secure login verification code has been successfully dispatched to your Gmail: ${emailLower}`
+    });
+
   } catch (error: any) {
     console.error("[LOGIN CONTROLLER ERROR]", error);
     return res.status(500).json({ error: "Internal server error occurred during login." });
+  }
+});
+
+// Endpoint to verify the login 2FA code and complete login
+app.post("/api/auth/verify-login", (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email || !code) {
+      return res.status(400).json({ error: "Email and verification code are required." });
+    }
+
+    const emailLower = email.toLowerCase();
+    const pending = pendingLogins.get(emailLower);
+
+    if (!pending) {
+      return res.status(400).json({ error: "No pending login session found. Please try logging in again." });
+    }
+
+    if (pending.expiresAt < Date.now()) {
+      pendingLogins.delete(emailLower);
+      return res.status(400).json({ error: "Your login code has expired. Please log in again." });
+    }
+
+    if (pending.code !== code.trim()) {
+      return res.status(400).json({ error: "Incorrect login verification code. Please check your email inbox and try again." });
+    }
+
+    // Clean up login session
+    pendingLogins.delete(emailLower);
+
+    console.log(`[AUTH LOGIN SUCCESS] User fully authenticated: ${emailLower}`);
+    return res.json({ success: true, email: emailLower, role: pending.role });
+
+  } catch (error: any) {
+    console.error("[VERIFY LOGIN ERROR]", error);
+    return res.status(500).json({ error: "Internal server error during login code verification." });
   }
 });
 
@@ -595,14 +700,14 @@ app.post("/api/send-email", async (req, res) => {
       </tr>
     `).join("");
 
-    const emailSubject = `⚡ NIKE CYBERPORT Order Confirmed: #${order.id}`;
+    const emailSubject = `⚡ SDAZUM CYBERPORT Order Confirmed: #${order.id}`;
 
     const emailBody = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Nike Cyberport Receipt</title>
+  <title>Sdazum Cyberport Receipt</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #020617; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #f1f5f9;">
   <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #020617; padding: 30px 10px;">
@@ -613,7 +718,7 @@ app.post("/api/send-email", async (req, res) => {
           <tr>
             <td style="background-color: #1e1b4b; padding: 24px; border-bottom: 2px solid #ec4899; text-align: center;">
               <span style="font-size: 10px; font-weight: 900; letter-spacing: 0.2em; color: #ec4899; font-family: monospace; display: block; margin-bottom: 8px;">AUTOMATED INSTANT DISPATCH</span>
-              <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; text-transform: uppercase; letter-spacing: -0.025em;">NIKE CYBERPORT</h1>
+              <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; text-transform: uppercase; letter-spacing: -0.025em;">SDAZUM CYBERPORT</h1>
             </td>
           </tr>
           
@@ -621,7 +726,7 @@ app.post("/api/send-email", async (req, res) => {
           <tr>
             <td style="padding: 30px;">
               <p style="margin-top: 0; font-size: 15px; line-height: 1.6; color: #cbd5e1;">
-                Athlete <strong>${order.address.name}</strong>,
+                Operator <strong>${order.address.name}</strong>,
               </p>
               <p style="font-size: 15px; line-height: 1.6; color: #cbd5e1;">
                 Your order is confirmed and has bypassed standard processing lanes. Our automated digital delivery daemon has successfully dispatched your hardware metrics.
@@ -678,7 +783,7 @@ app.post("/api/send-email", async (req, res) => {
 
               <div style="margin-top: 35px; padding-top: 20px; border-top: 1px solid #334155; text-align: center;">
                 <p style="font-size: 12px; color: #64748b; margin: 0;">
-                  Thank you for shopping at Nike Cyberport!
+                  Thank you for shopping at Sdazum Cyberport!
                 </p>
                 <p style="font-size: 10px; color: #475569; margin-top: 8px; font-family: monospace;">
                   GATEWAY TRACE CODE: CP-GTW-${Math.floor(Math.random() * 89999) + 10000}
@@ -736,8 +841,729 @@ app.post("/api/send-email", async (req, res) => {
   }
 });
 
+// Real-time Chat Persistence Store
+const CHAT_DB_PATH = path.join(getDbDir(), "chat_messages.json");
+let savedMessages: any[] = [];
+try {
+  if (fs.existsSync(CHAT_DB_PATH)) {
+    savedMessages = JSON.parse(fs.readFileSync(CHAT_DB_PATH, "utf-8"));
+  } else {
+    fs.writeFileSync(CHAT_DB_PATH, JSON.stringify([], null, 2), "utf-8");
+  }
+} catch (err) {
+  console.error("[CHAT DB ERROR] Failed to load chat history:", err);
+}
+
+// Retrieve all registered user accounts for customer directory and live direct chat contact listing
+app.get("/api/auth/users", (req, res) => {
+  try {
+    let users = [];
+    if (fs.existsSync(USERS_DB_PATH)) {
+      users = JSON.parse(fs.readFileSync(USERS_DB_PATH, "utf-8"));
+    }
+    // Return sanitized users (email, name, role, etc., no passwordHash)
+    const sanitized = users.map((u: any) => ({
+      email: u.email,
+      name: u.name || u.email.split("@")[0],
+      joinedDate: u.createdAt || new Date().toISOString(),
+      role: u.email === "mohabmohnad9@gmail.com" ? "admin" : "user",
+      avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(u.email)}`,
+      status: "active"
+    }));
+    return res.json({ users: sanitized });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Social Login Account Creation & Connection Simulator
+app.post("/api/auth/social-register", (req, res) => {
+  try {
+    const { email, name, provider } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: "Email address is required for social connection." });
+    }
+
+    let users = [];
+    if (fs.existsSync(USERS_DB_PATH)) {
+      users = JSON.parse(fs.readFileSync(USERS_DB_PATH, "utf-8"));
+    }
+
+    const emailLower = email.toLowerCase();
+    let targetUser = users.find((u: any) => u.email === emailLower);
+
+    if (!targetUser) {
+      // Register new user via Social Authorization
+      targetUser = {
+        email: emailLower,
+        name: name || emailLower.split("@")[0],
+        provider: provider || "social",
+        role: "admin",
+        createdAt: new Date().toISOString(),
+        passwordHash: hashPassword(crypto.randomUUID()) // Random secure pass hash
+      };
+      users.push(targetUser);
+      fs.writeFileSync(USERS_DB_PATH, JSON.stringify(users, null, 2), "utf-8");
+      console.log(`[SOCIAL REGISTER SUCCESS] Created real account via ${provider}: ${emailLower}`);
+    } else {
+      console.log(`[SOCIAL LOGIN SUCCESS] Connected to existing account via ${provider}: ${emailLower}`);
+    }
+
+    const userRole = targetUser.role || (targetUser.email === "mohabmohnad9@gmail.com" ? "admin" : "user");
+    return res.json({
+      success: true,
+      email: targetUser.email,
+      role: userRole,
+      user: {
+        email: targetUser.email,
+        name: targetUser.name || targetUser.email.split("@")[0],
+        role: userRole
+      }
+    });
+
+  } catch (err: any) {
+    console.error("[SOCIAL AUTH CONTROLLER ERROR]", err);
+    return res.status(500).json({ error: "Social login authentication failure." });
+  }
+});
+
+// Fallback HTTP API endpoint for chat history retrieval
+app.get("/api/chat/history", (req, res) => {
+  return res.json({ messages: savedMessages });
+});
+
+// HTTP API endpoint to delete a chat message (own messages only)
+app.delete("/api/chat/delete/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ error: "Missing message id parameter" });
+    }
+
+    const msgIndex = savedMessages.findIndex((m: any) => m.id === id);
+    if (msgIndex === -1) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    const msg = savedMessages[msgIndex];
+    
+    // Only verify ownership if email is supplied and we're verifying ownership
+    if (email && msg.senderEmail && msg.senderEmail.toLowerCase() !== email.toLowerCase()) {
+      return res.status(403).json({ error: "Forbidden: You can only delete your own messages" });
+    }
+
+    savedMessages.splice(msgIndex, 1);
+
+    try {
+      fs.writeFileSync(CHAT_DB_PATH, JSON.stringify(savedMessages, null, 2), "utf-8");
+    } catch (writeErr) {
+      console.error("[CHAT DB WRITE ERROR]", writeErr);
+    }
+
+    // Broadcast deletion message to connected clients
+    if (wssInstance) {
+      wssInstance.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(JSON.stringify({ type: "message_deleted", id }));
+        }
+      });
+    }
+
+    return res.json({ success: true, deletedId: id });
+  } catch (err: any) {
+    console.error("[CHAT DELETE CONTROLLER ERROR]", err);
+    return res.status(500).json({ error: err.message || "Internal Server Error" });
+  }
+});
+
+let wssInstance: WebSocketServer | null = null;
+
+// HTTP API endpoint to send a chat message
+app.post("/api/chat/send", async (req, res) => {
+  try {
+    const { 
+      text, 
+      senderEmail, 
+      recipientId, 
+      userName, 
+      userAvatar, 
+      audioUrl, 
+      stickerUrl, 
+      file,
+      aiCopilotActive 
+    } = req.body;
+
+    if (!text && !audioUrl && !stickerUrl && !file) {
+      return res.status(400).json({ error: "Missing message content" });
+    }
+
+    const activeRecipient = recipientId || "lounge";
+    const sender = senderEmail || "guest@cyberport.com";
+
+    const newMsg = {
+      id: crypto.randomUUID(),
+      sender: "user",
+      senderEmail: sender,
+      recipientId: activeRecipient,
+      text: text || "",
+      date: new Date().toLocaleTimeString(),
+      userName: userName || "Operator Guest",
+      userAvatar: userAvatar || `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(sender)}`,
+      audioUrl: audioUrl || null,
+      stickerUrl: stickerUrl || null,
+      file: file || null,
+      timestamp: Date.now()
+    };
+
+    savedMessages.push(newMsg);
+    if (savedMessages.length > 500) {
+      savedMessages.shift();
+    }
+
+    try {
+      fs.writeFileSync(CHAT_DB_PATH, JSON.stringify(savedMessages, null, 2), "utf-8");
+    } catch (writeErr) {
+      console.error("[CHAT DB WRITE ERROR]", writeErr);
+    }
+
+    // Broadcast message via WS to all active clients
+    if (wssInstance) {
+      const broadcastMsg = JSON.stringify({ type: "message", message: newMsg });
+      wssInstance.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(broadcastMsg);
+        }
+      });
+    }
+
+    // Auto AI Response Trigger
+    const isAiAgent = ["elena", "marcus", "sora"].includes(activeRecipient);
+    const triggerLoungeCopilot = activeRecipient === "lounge" && aiCopilotActive;
+
+    if (isAiAgent || triggerLoungeCopilot) {
+      const systemInstructions: Record<string, string> = {
+        elena: "You are Elena, lead Dispatch & Logistics Coordinator at Sdazum Cyberport. Assist users with order shipping tracks, digital microservice license activation keys, or virtual logistics logs. Keep replies extremely engaging, helpful, and concise.",
+        marcus: "You are Marcus, Ecommerce Store Account and Billing Operations Lead. Help users with payment solutions, card transactions, wallets, refund parameters, and account upgrades. Speak with crisp authority.",
+        sora: "You are Sora, chief Industrial Machinery & Machinery Spec Expert. Advise users on power grid parameters, multi-phase high voltages (220V/380V/440V), load specs, and machine installations (CNC, fiber cutters). Be technical, highly analytical, and clear.",
+        lounge: "You are Gemini AI Assistant, participating in the live Operators Lounge global chat. Help anyone with any queries they raise, and discuss sportswear, machine engineering, and automation with brilliant versatility."
+      };
+
+      const systemPrompt = systemInstructions[activeRecipient] || systemInstructions.lounge;
+      const client = getGenAI();
+
+      if (client) {
+        try {
+          // Construct multimodal parts
+          const promptParts: any[] = [];
+          
+          if (text) promptParts.push(text);
+          if (stickerUrl) promptParts.push(`[User sent a sticker image representation: ${stickerUrl}]`);
+          if (audioUrl) promptParts.push(`[User sent a voice message recorded sound file]`);
+
+          if (file && file.url && file.url.startsWith("data:")) {
+            const match = file.url.match(/^data:([^;]+);base64,(.+)$/);
+            if (match) {
+              const mimeType = match[1];
+              const base64Data = match[2];
+              if (mimeType.startsWith("image/")) {
+                promptParts.push({
+                  inlineData: {
+                    data: base64Data,
+                    mimeType: mimeType
+                  }
+                });
+              } else {
+                promptParts.push(`[User attached file named: ${file.name} of type: ${file.type} and size: ${file.size}]`);
+              }
+            }
+          }
+
+          const response = await client.models.generateContent({
+            model: "gemini-3.5-flash",
+            contents: promptParts,
+            config: {
+              systemInstruction: systemPrompt
+            }
+          });
+
+          const aiText = response.text || "I have received your feed and logged it securely.";
+          const aiMsg = {
+            id: crypto.randomUUID(),
+            sender: "agent",
+            senderEmail: activeRecipient,
+            recipientId: activeRecipient === "lounge" ? "lounge" : sender,
+            text: aiText,
+            date: new Date().toLocaleTimeString(),
+            userName: activeRecipient === "elena" 
+              ? "Elena (Logistics Coordinator)" 
+              : activeRecipient === "marcus" 
+                ? "Marcus (Store Account Manager)" 
+                : activeRecipient === "sora" 
+                  ? "Sora (Machinery Spec Expert)" 
+                  : "Gemini AI Assistant",
+            userAvatar: activeRecipient === "elena"
+              ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100"
+              : activeRecipient === "marcus"
+                ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100"
+                : activeRecipient === "sora"
+                  ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100"
+                  : "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=100",
+            timestamp: Date.now()
+          };
+
+          savedMessages.push(aiMsg);
+          fs.writeFileSync(CHAT_DB_PATH, JSON.stringify(savedMessages, null, 2), "utf-8");
+
+          if (wssInstance) {
+            wssInstance.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: "message", message: aiMsg }));
+              }
+            });
+          }
+
+        } catch (geminiErr: any) {
+          console.error("[GEMINI CHAT ROUTER ERROR]", geminiErr);
+        }
+      } else {
+        // Fallback simulated replies
+        setTimeout(() => {
+          const simulatedReplies: Record<string, string[]> = {
+            elena: [
+              "Elena: Got your transmission! I've logged your request. Real-time factory shipping queue is active and clear.",
+              "Elena: Dispatch keys are queued up. Let me know if you need to trace server parameters!"
+            ],
+            marcus: [
+              "Marcus: Understood. Checked the ledger, your transaction state is verified. Contact me if refunds are needed.",
+              "Marcus: Checkout rates look exceptional. Your current tier is fully authorized."
+            ],
+            sora: [
+              "Sora: Telemetry review complete. Ensure multi-phase 440V distribution grid is stable before booting high-voltage CNC servos.",
+              "Sora: Thermal parameters look safe (230°C on vulcanizers). Physical safeguards active."
+            ],
+            lounge: [
+              "Gemini AI (Local Backup): [Remote Gemini API key not detected] Welcome! I'm here to chat about athletics, machinery spec, and custom sportswear layouts.",
+              "Gemini AI (Local Backup): Message logged successfully. Keep fabricating!"
+            ]
+          };
+
+          const bucket = simulatedReplies[activeRecipient] || simulatedReplies.lounge;
+          const randomReply = bucket[Math.floor(Math.random() * bucket.length)];
+
+          const aiMsg = {
+            id: crypto.randomUUID(),
+            sender: "agent",
+            senderEmail: activeRecipient,
+            recipientId: activeRecipient === "lounge" ? "lounge" : sender,
+            text: randomReply,
+            date: new Date().toLocaleTimeString(),
+            userName: activeRecipient === "elena" 
+              ? "Elena (Logistics Coordinator)" 
+              : activeRecipient === "marcus" 
+                ? "Marcus (Store Account Manager)" 
+                : activeRecipient === "sora" 
+                  ? "Sora (Machinery Spec Expert)" 
+                  : "Gemini AI Assistant",
+            userAvatar: activeRecipient === "elena"
+              ? "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=100"
+              : activeRecipient === "marcus"
+                ? "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100"
+                : activeRecipient === "sora"
+                  ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100"
+                  : "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=100",
+            timestamp: Date.now()
+          };
+
+          savedMessages.push(aiMsg);
+          fs.writeFileSync(CHAT_DB_PATH, JSON.stringify(savedMessages, null, 2), "utf-8");
+
+          if (wssInstance) {
+            wssInstance.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: "message", message: aiMsg }));
+              }
+            });
+          }
+        }, 1500);
+      }
+    } else {
+      // It's a standard user to user private message!
+      // Send simulated recipient automatic replies if the recipient is not online (so it feels highly reactive)
+      const isRecipientSeed = ["mohabmohnad9@gmail.com"].includes(activeRecipient);
+      if (isRecipientSeed) {
+        setTimeout(() => {
+          const directReplies = [
+            `Hey there! I received your message: "${text || 'media'}". Let's sync up later today regarding our sportswear order!`,
+            "Logged in. Looks like the machinery specifications are running great on our end. Talk to you soon!",
+            "Thanks for the update. Let me double-check the digital wallet logs!"
+          ];
+          const chosen = directReplies[Math.floor(Math.random() * directReplies.length)];
+          const peerMsg = {
+            id: crypto.randomUUID(),
+            sender: "user",
+            senderEmail: activeRecipient,
+            recipientId: sender,
+            text: chosen,
+            date: new Date().toLocaleTimeString(),
+            userName: activeRecipient.split("@")[0],
+            userAvatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(activeRecipient)}`,
+            timestamp: Date.now()
+          };
+          savedMessages.push(peerMsg);
+          fs.writeFileSync(CHAT_DB_PATH, JSON.stringify(savedMessages, null, 2), "utf-8");
+
+          if (wssInstance) {
+            wssInstance.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: "message", message: peerMsg }));
+              }
+            });
+          }
+        }, 2000);
+      }
+    }
+
+    return res.json({ success: true, message: newMsg });
+  } catch (err: any) {
+    console.error("[CHAT SEND CONTROLLER ERROR]", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Server-side Gemini AI Chat endpoint
+app.post("/api/gemini/chat", async (req, res) => {
+  try {
+    const { prompt, chatHistory } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: "Missing prompt parameter" });
+    }
+
+    const client = getGenAI();
+    if (!client) {
+      // Friendly, highly relevant industrial-sportswear fallback responses when no key is set
+      const fallbackReplies = [
+        "Sora here, assisting on behalf of our AI agent: To optimize manufacturing throughput for seamless athletic fabrics, verify that the ultrasonic welding frequency matches the precise elastic density of the elastane yarn.",
+        "Elena here, via the AI pipeline: Regarding activation keys or dispatch queue issues, make sure the SMTP environment variables or client ID parameters are aligned in your workspace.",
+        "Dave from Operations: I've analyzed your telemetry request. We recommend initiating a calibration sequence on the CNC lathe and ensuring the safety guards are locked.",
+        "AI Assistant: I am connected to the Sdazum database. Your customized performance sportswear layouts have been loaded and are ready for checkout processing.",
+        "System Log: Optimal operating voltage verified. Thermal molding sensors indicate 230°C on the active vulcanizer plate. Please calibrate fabric feeder speeds."
+      ];
+      const selectedReply = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+      return res.json({ text: selectedReply });
+    }
+
+    // Build complete conversation history for the Gemini API call
+    let contents: any = [];
+    if (Array.isArray(chatHistory) && chatHistory.length > 0) {
+      contents = chatHistory.map(item => ({
+        role: item.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: item.text || '' }]
+      }));
+      // Append the current prompt if the last message in history is not this prompt
+      if (contents.length === 0 || contents[contents.length - 1].role !== 'user' || contents[contents.length - 1].parts[0].text !== prompt) {
+        contents.push({ role: 'user', parts: [{ text: prompt }] });
+      }
+    } else {
+      contents = prompt;
+    }
+
+    const response = await client.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: contents,
+      config: {
+        systemInstruction: "You are the Sdazum Intelligent AI Assistant. You must answer ANY question asked by the user, whether it is about industrial machinery, precision CNC milling, robotics, general knowledge, science, mathematics, coding, history, or just general conversation. Be highly helpful, polite, professional, and answer comprehensively in the language used by the user (English, Chinese, or Arabic). Always answer completely and accurately without restricting yourself to shop operations.",
+      }
+    });
+
+    return res.json({ text: response.text || "I have processed your request. Let me know if you require further parameters checked!" });
+  } catch (err: any) {
+    console.error("[GEMINI CHAT ERROR - FALLING BACK TO ROBUST SIMULATOR]", err);
+    
+    // Provide a smart local fallback response when the remote Gemini API experiences high demand (e.g. 503)
+    const errorFallbackReplies = [
+      "Gemini AI (Local Backup): [Remote model is currently experiencing high demand. Seamless telemetry mode engaged.] Everything is running within acceptable safety thresholds. Please monitor the pressure metrics.",
+      "Gemini AI (Local Backup): Received your transmission! The core database and active vulcanizer plates are within normal limits (230°C). Ready to process custom gear selections.",
+      "Gemini AI (Local Backup): Understood. The digital delivery system for sportswear license keys is primed and operating at peak capacity.",
+      "Gemini AI (Local Backup): Message logged successfully. Let me know if you require further physical properties or server parameters to be calibrated.",
+      "Dave from Operations (Backup Routing): Got your message. Remember to double-check that the physical guards on the laser optical cutter are secured before proceeding!"
+    ];
+    const selectedReply = errorFallbackReplies[Math.floor(Math.random() * errorFallbackReplies.length)];
+    return res.json({ text: selectedReply });
+  }
+});
+
 // Setup Vite & Static Files middlewares
 async function startServer() {
+  const server = http.createServer(app);
+
+  // Setup WebSocket server
+  const wss = new WebSocketServer({ noServer: true });
+  wssInstance = wss;
+
+  wss.on("connection", (ws: WebSocket) => {
+    console.log("[WS CHAT] Client connected to real-time room.");
+    
+    // Send full history upon client connection
+    ws.send(JSON.stringify({ type: "init", messages: savedMessages }));
+
+    ws.on("message", (rawMsg: string) => {
+      try {
+        const payload = JSON.parse(rawMsg);
+        if (payload.type === "message") {
+          const newMsg = {
+            id: crypto.randomUUID(),
+            sender: "agent", // Left-aligned on other screens
+            text: payload.text,
+            date: new Date().toLocaleTimeString(),
+            userName: payload.userName || "Operator Guest",
+            userAvatar: payload.userAvatar || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100",
+            timestamp: Date.now()
+          };
+
+          savedMessages.push(newMsg);
+          if (savedMessages.length > 200) {
+            savedMessages.shift();
+          }
+
+          try {
+            fs.writeFileSync(CHAT_DB_PATH, JSON.stringify(savedMessages, null, 2), "utf-8");
+          } catch (writeErr) {
+            console.error("[WS CHAT] DB save error:", writeErr);
+          }
+
+          // Broadcast user message to all connected clients
+          const broadcastMsg = JSON.stringify({ type: "message", message: newMsg });
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(broadcastMsg);
+            }
+          });
+
+          // Simulate organic reaction from another factory operator after a brief delay
+          setTimeout(() => {
+            const operators = [
+              { name: "Gary (CNC Specialist)", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100", replies: [
+                "Good point! We calibrated our RX-200 high-voltage servo encoders today.",
+                "Always good to see other engineers online. Our Michigan shop is running full-force.",
+                "Understood. Ensure your safety guards are locked before running the heavy laser cutter!"
+              ]},
+              { name: "Sarah (Molding & Fab)", avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100", replies: [
+                "Agree! Just finalized the installation of the 12kW fiber optical cutter.",
+                "Checking in from Detroit. Sdaum equipment reliability is absolutely stellar.",
+                "Anyone else doing custom ID engravings on their high-performance athlete parts?"
+              ]}
+            ];
+
+            const operator = operators[Math.floor(Math.random() * operators.length)];
+            const text = operator.replies[Math.floor(Math.random() * operator.replies.length)];
+
+            const simulatedResponse = {
+              id: crypto.randomUUID(),
+              sender: "agent",
+              text: text,
+              date: new Date().toLocaleTimeString(),
+              userName: operator.name,
+              userAvatar: operator.avatar,
+              timestamp: Date.now()
+            };
+
+            savedMessages.push(simulatedResponse);
+            if (savedMessages.length > 200) {
+              savedMessages.shift();
+            }
+
+            try {
+              fs.writeFileSync(CHAT_DB_PATH, JSON.stringify(savedMessages, null, 2), "utf-8");
+            } catch (err) {
+              console.error("[WS CHAT] DB simulation save error:", err);
+            }
+
+            const broadcastSim = JSON.stringify({ type: "message", message: simulatedResponse });
+            wss.clients.forEach((client) => {
+              if (client.readyState === WebSocket.OPEN) {
+                client.send(broadcastSim);
+              }
+            });
+
+          }, 1500 + Math.random() * 1500);
+        }
+      } catch (err) {
+        console.error("[WS CHAT] Message process error:", err);
+      }
+    });
+
+    ws.on("close", () => {
+      console.log("[WS CHAT] Client disconnected.");
+    });
+  });
+
+  // PWA & Download Endpoints
+  app.get("/manifest.json", (req, res) => {
+    res.json({
+      name: "Sdazum Global Import & Industrial Machinery Cyberport",
+      short_name: "Sdazum Cyberport",
+      description: "Sdazum Global Import & Industrial Machinery Cyberport - Elite Digital Portal",
+      start_url: "/",
+      display: "standalone",
+      background_color: "#020617",
+      theme_color: "#00f0ff",
+      orientation: "any",
+      categories: ["business", "productivity", "shopping"],
+      icons: [
+        {
+          src: "https://api.dicebear.com/7.x/identicon/svg?seed=Sdazum",
+          sizes: "192x192",
+          type: "image/svg+xml",
+          purpose: "any maskable"
+        },
+        {
+          src: "https://api.dicebear.com/7.x/identicon/svg?seed=SdazumGlobal",
+          sizes: "512x512",
+          type: "image/svg+xml",
+          purpose: "any maskable"
+        }
+      ]
+    });
+  });
+
+  app.get("/sw.js", (req, res) => {
+    res.setHeader("Content-Type", "application/javascript");
+    res.send(`
+      const CACHE_NAME = 'sdazum-cache-v3';
+      const STATIC_ASSETS = [
+        '/',
+        '/index.html',
+        '/manifest.json'
+      ];
+
+      // Install Event - Pre-cache essential offline shells
+      self.addEventListener('install', event => {
+        event.waitUntil(
+          caches.open(CACHE_NAME).then(cache => {
+            console.log('[Service Worker] Pre-caching core structural shells');
+            return cache.addAll(STATIC_ASSETS);
+          }).then(() => self.skipWaiting())
+        );
+      });
+
+      // Activate Event - Clean up stale caches
+      self.addEventListener('activate', event => {
+        event.waitUntil(
+          caches.keys().then(cacheNames => {
+            return Promise.all(
+              cacheNames.map(cache => {
+                if (cache !== CACHE_NAME) {
+                  console.log('[Service Worker] Deleting old cache shell:', cache);
+                  return caches.delete(cache);
+                }
+              })
+            );
+          }).then(() => self.clients.claim())
+        );
+      });
+
+      // Fetch Event with dedicated offline handling
+      self.addEventListener('fetch', event => {
+        const { request } = event;
+        const url = new URL(request.url);
+
+        // Standard bypass rules (e.g. non-GET, WebSockets)
+        if (request.method !== 'GET' || url.protocol === 'ws:' || url.protocol === 'wss:') {
+          return;
+        }
+
+        // 1. Dynamic Network-First falling back to Cache for catalog API responses (allows offline viewing!)
+        if (url.pathname.startsWith('/api/')) {
+          event.respondWith(
+            fetch(request)
+              .then(response => {
+                if (response.status === 200) {
+                  const responseClone = response.clone();
+                  caches.open(CACHE_NAME).then(cache => {
+                    cache.put(request, responseClone);
+                  });
+                }
+                return response;
+              })
+              .catch(() => {
+                console.log('[Service Worker] Server offline. Accessing cached catalog directory.');
+                return caches.match(request);
+              })
+          );
+          return;
+        }
+
+        // 2. Cache-First falling back to Network for image assets, static JS, and icon graphics
+        event.respondWith(
+          caches.match(request).then(cachedResponse => {
+            if (cachedResponse) {
+              // Refresh static non-image text assets in background
+              if (!url.pathname.match(/\\.(png|jpg|jpeg|gif|svg|webp|ico)$/i)) {
+                fetch(request).then(networkResponse => {
+                  if (networkResponse.status === 200) {
+                    caches.open(CACHE_NAME).then(cache => cache.put(request, networkResponse));
+                  }
+                }).catch(() => {});
+              }
+              return cachedResponse;
+            }
+
+            return fetch(request).then(networkResponse => {
+              if (!networkResponse || networkResponse.status !== 200 || (networkResponse.type !== 'basic' && !url.origin.includes('unsplash') && !url.origin.includes('dicebear'))) {
+                return networkResponse;
+              }
+
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME).then(cache => {
+                cache.put(request, responseToCache);
+              });
+
+              return networkResponse;
+            }).catch(() => {
+              // If navigating HTML shell while offline, fall back to index.html
+              if (request.headers.get('accept')?.includes('text/html')) {
+                return caches.match('/');
+              }
+              return null;
+            });
+          })
+        );
+      });
+    `);
+  });
+
+  app.get("/api/download-app-zip", (req, res) => {
+    const filePath = path.join(process.cwd(), "project.tar.gz");
+    if (fs.existsSync(filePath)) {
+      res.setHeader("Content-Disposition", "attachment; filename=sdazum-global-cyberport.tar.gz");
+      res.sendFile(filePath);
+    } else {
+      res.status(404).send("Archive is currently generating or not available. Please try again in a moment.");
+    }
+  });
+
+  app.get("/api/download-app-exe", (req, res) => {
+    const filePath = path.join(process.cwd(), "dist", "sdazum-global-portal.exe");
+    if (fs.existsSync(filePath)) {
+      res.setHeader("Content-Disposition", "attachment; filename=sdazum-global-portal.exe");
+      res.sendFile(filePath);
+    } else {
+      res.status(404).send("Windows desktop executable (.exe) is currently compiling or not found. Please try again in a few seconds.");
+    }
+  });
+
+  // Handle upgrade manually
+  server.on("upgrade", (request, socket, head) => {
+    const pathname = request.url ? new URL(request.url, `http://${request.headers.host}`).pathname : "";
+    if (pathname === "/ws-chat") {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit("connection", ws, request);
+      });
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
@@ -753,8 +1579,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[NIKE CYBERPORT SERVER] Running on port ${PORT}`);
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`[SDAZUM CYBERPORT SERVER] Running on port ${PORT}`);
   });
 }
 

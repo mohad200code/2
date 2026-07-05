@@ -73,7 +73,7 @@ export const ProductSVG: React.FC<ProductSVGProps> = ({ type, color, className =
             strokeWidth="2"
             strokeLinejoin="round"
           />
-          {/* Distinct Nike-style swoop overlay */}
+          {/* Distinct Sdazum-style swoop overlay */}
           <path
             d="M40 48 Q55 52 65 43 Q58 56 45 54 Z"
             fill="#1E293B"
