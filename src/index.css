@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+}
+
 /* Cyberpunk Glows, Glitch and Background effects */
 @keyframes cyber-glitch {
   0% { transform: translate(0) }
@@ -87,3 +91,390 @@
 
 /* Elegant, solid pure black text for maximum readability in Day Mode */
 
+/* Specific interactive scale-up hover animation for all cards */
+.intense-hover-card {
+  position: relative !important;
+  overflow: hidden !important;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.3s ease;
+}
+.intense-hover-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: skewX(-25deg);
+  pointer-events: none;
+  z-index: 20;
+}
+.intense-hover-card:hover::before {
+  animation: shine-sweep 0.8s ease-in-out forwards;
+}
+.intense-hover-card:hover {
+  transform: translateY(0px) scale(1) !important;
+  transition: border-color 0.4s ease 0.8s, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* Day theme intense neon glow */
+.intense-hover-card.theme-day:hover {
+  box-shadow: 
+    0 20px 40px -15px rgba(15, 23, 42, 0.15), 
+    0 0 15px rgba(99, 102, 241, 0.45), 
+    0 0 30px rgba(99, 102, 241, 0.25), 
+    0 0 45px rgba(244, 63, 94, 0.15) !important;
+  border-color: rgba(99, 102, 241, 0.75) !important;
+}
+
+/* Night theme intense neon glow */
+.intense-hover-card.theme-night:hover {
+  box-shadow: 
+    0 20px 40px -15px rgba(0, 0, 0, 0.7), 
+    0 0 20px rgba(79, 70, 229, 0.55), 
+    0 0 40px rgba(124, 58, 237, 0.35), 
+    0 0 60px rgba(139, 92, 246, 0.2) !important;
+  border-color: rgba(139, 92, 246, 0.8) !important;
+}
+
+/* Cyberpunk theme intense neon glow */
+.intense-hover-card.theme-cyberpunk:hover {
+  box-shadow: 
+    0 20px 40px -15px rgba(0, 0, 0, 0.8), 
+    0 0 25px rgba(244, 63, 94, 0.65), 
+    0 0 50px rgba(6, 182, 212, 0.45), 
+    0 0 75px rgba(244, 63, 94, 0.25) !important;
+  border-color: rgba(244, 63, 94, 0.8) !important;
+}
+
+@keyframes shine-sweep {
+  0% {
+    left: -150%;
+  }
+  100% {
+    left: 150%;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Specific tactile magnetic snap 3D parallax styles for ALL product cards */
+.all-products-glowing-shadow {
+  transition: transform 0.15s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.15s cubic-bezier(0.25, 1, 0.5, 1), border-color 0.15s ease !important;
+}
+
+.all-products-glowing-shadow:hover {
+  transform: translateY(0px) scale(1) !important;
+}
+
+.all-products-glowing-shadow.theme-day:hover {
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  box-shadow: 
+    0 20px 35px -12px rgba(15, 23, 42, 0.12), 
+    0 0 15px rgba(99, 102, 241, 0.15) !important;
+}
+
+.all-products-glowing-shadow.theme-night:hover {
+  border-color: rgba(139, 92, 246, 0.4) !important;
+  box-shadow: 
+    0 20px 35px -12px rgba(0, 0, 0, 0.6), 
+    0 0 15px rgba(139, 92, 246, 0.15) !important;
+}
+
+.all-products-glowing-shadow.theme-cyberpunk:hover {
+  border-color: rgba(244, 63, 94, 0.8) !important;
+  box-shadow: 
+    0 20px 35px -12px rgba(0, 0, 0, 0.7), 
+    0 0 15px rgba(244, 63, 94, 0.3) !important;
+}
+
+/* Futuristic Cyber Scanline Animation for Corporate Cards */
+@keyframes scanline-anim {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(300px); }
+  100% { transform: translateY(0); }
+}
+
+.animate-scanline {
+  animation: scanline-anim 4s ease-in-out infinite;
+}
+
+/* Cyberpunk Neon Cyan Hover Pulse & Transition for Application Container */
+#application-container {
+  position: relative;
+  overflow: hidden;
+  transition: background-color 1.0s cubic-bezier(0.4, 0, 0.2, 1), 
+              color 1.0s cubic-bezier(0.4, 0, 0.2, 1), 
+              box-shadow 1.0s cubic-bezier(0.4, 0, 0.2, 1), 
+              border-color 1.0s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid transparent;
+  box-shadow: inset 0 0 10px rgba(15, 23, 42, 0.03), 0 0 5px rgba(15, 23, 42, 0.01);
+}
+
+/* Subtle, animated CRT scanline overlay effect as a pseudo-element on the #application-container */
+#application-container::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.05) 50%
+  );
+  background-size: 100% 4px;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.15;
+  transition: opacity 1.0s ease;
+}
+
+#application-container::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 120px;
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 16, 16, 0) 0%,
+    rgba(0, 240, 255, 0.01) 10%,
+    rgba(0, 240, 255, 0.04) 50%,
+    rgba(244, 63, 94, 0.04) 52%,
+    rgba(0, 240, 255, 0.01) 90%,
+    rgba(18, 16, 16, 0) 100%
+  );
+  z-index: 41;
+  pointer-events: none;
+  opacity: 0.15;
+  animation: crt-sweep 12s linear infinite;
+  transition: opacity 1.0s ease;
+}
+
+#application-container.theme-night::before {
+  opacity: 0.55;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.08) 50%
+  );
+  background-size: 100% 4px;
+}
+
+#application-container.theme-night::after {
+  opacity: 0.5;
+}
+
+#application-container.theme-cyberpunk::before {
+  opacity: 0.8;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.12) 50%
+  );
+  background-size: 100% 4px;
+}
+
+#application-container.theme-cyberpunk::after {
+  opacity: 0.8;
+  background: linear-gradient(
+    to bottom,
+    rgba(18, 16, 16, 0) 0%,
+    rgba(0, 240, 255, 0.02) 10%,
+    rgba(0, 240, 255, 0.06) 50%,
+    rgba(244, 63, 94, 0.06) 52%,
+    rgba(0, 240, 255, 0.02) 90%,
+    rgba(18, 16, 16, 0) 100%
+  );
+}
+
+@keyframes crt-sweep {
+  0% {
+    top: -120px;
+  }
+  100% {
+    top: 100%;
+  }
+}
+
+/* Day Mode subtle neutral boundary */
+#application-container.theme-day {
+  border-color: rgba(226, 232, 240, 0.8);
+  box-shadow: inset 0 0 15px rgba(15, 23, 42, 0.02), 0 0 10px rgba(15, 23, 42, 0.01);
+}
+
+/* Night Mode elegant subtle indigo/slate boundary with backdrop-filter blur */
+#application-container.theme-night {
+  background-color: rgba(15, 23, 42, 0.75) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border-color: rgba(99, 102, 241, 0.15);
+  box-shadow: inset 0 0 20px rgba(99, 102, 241, 0.08), 0 0 12px rgba(99, 102, 241, 0.05);
+}
+
+/* Cyberpunk Mode - Intensified neon border-glow effect with backdrop-filter blur and semi-transparent background */
+#application-container.theme-cyberpunk {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  border-color: rgba(244, 63, 94, 0.3);
+  box-shadow: inset 0 0 25px rgba(244, 63, 94, 0.15), 
+              0 0 15px rgba(244, 63, 94, 0.1),
+              inset 0 0 45px rgba(244, 63, 94, 0.15), 
+              0 0 25px rgba(244, 63, 94, 0.1);
+}
+
+/* Dynamic glow shift from cyan to pink on click (immediate feedback) */
+#application-container:active {
+  border-color: rgba(244, 63, 94, 0.9) !important;
+  box-shadow: inset 0 0 50px rgba(244, 63, 94, 0.5), 
+              0 0 30px rgba(244, 63, 94, 0.4),
+              inset 0 0 60px rgba(244, 63, 94, 0.3), 
+              0 0 25px rgba(244, 63, 94, 0.2) !important;
+  transition: border-color 0.1s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.1s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Hover effects for each theme */
+#application-container.theme-day:hover {
+  border-color: rgba(14, 165, 233, 0.2);
+  box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.05), 0 0 12px rgba(14, 165, 233, 0.02);
+}
+
+#application-container.theme-night:hover {
+  border-color: rgba(99, 102, 241, 0.25);
+  box-shadow: inset 0 0 25px rgba(99, 102, 241, 0.1), 0 0 15px rgba(99, 102, 241, 0.05);
+}
+
+#application-container.theme-cyberpunk:hover {
+  animation: neon-cyber-hover-pulse 4s infinite ease-in-out;
+}
+
+@keyframes neon-cyber-hover-pulse {
+  0% {
+    border-color: rgba(244, 63, 94, 0.3);
+    box-shadow: inset 0 0 20px rgba(244, 63, 94, 0.15), 
+                0 0 10px rgba(244, 63, 94, 0.08),
+                inset 0 0 40px rgba(244, 63, 94, 0.15), 
+                0 0 15px rgba(244, 63, 94, 0.08);
+  }
+  25% {
+    border-color: rgba(244, 63, 94, 0.5);
+    box-shadow: inset 0 0 45px rgba(244, 63, 94, 0.3), 
+                0 0 25px rgba(244, 63, 94, 0.2),
+                inset 0 0 35px rgba(244, 63, 94, 0.12), 
+                0 0 10px rgba(244, 63, 94, 0.05);
+  }
+  50% {
+    border-color: rgba(244, 63, 94, 0.7);
+    box-shadow: inset 0 0 60px rgba(244, 63, 94, 0.45), 
+                0 0 35px rgba(244, 63, 94, 0.35),
+                inset 0 0 60px rgba(244, 63, 94, 0.25), 
+                0 0 30px rgba(244, 63, 94, 0.15);
+  }
+  75% {
+    border-color: rgba(244, 63, 94, 0.45);
+    box-shadow: inset 0 0 35px rgba(244, 63, 94, 0.2), 
+                0 0 18px rgba(244, 63, 94, 0.12),
+                inset 0 0 55px rgba(244, 63, 94, 0.25), 
+                0 0 28px rgba(244, 63, 94, 0.18);
+  }
+  100% {
+    border-color: rgba(244, 63, 94, 0.3);
+    box-shadow: inset 0 0 20px rgba(244, 63, 94, 0.15), 
+                0 0 10px rgba(244, 63, 94, 0.08),
+                inset 0 0 40px rgba(244, 63, 94, 0.15), 
+                0 0 15px rgba(244, 63, 94, 0.08);
+  }
+}
+
+/* Completely hide all scrollbars globally across the app while preserving scroll behavior, except for cyber-scroll which will be incredibly cool */
+::-webkit-scrollbar:not(.cyber-scroll), 
+*::-webkit-scrollbar:not(.cyber-scroll), 
+html::-webkit-scrollbar, 
+body::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+html, body, *:not(.cyber-scroll) {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important;  /* IE and Edge */
+}
+
+/* Highly optimized sleek and glowing high-tech cyber-scroll scrollbar */
+.cyber-scroll {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(6, 182, 212, 0.6) rgba(15, 23, 42, 0.7) !important;
+}
+
+.cyber-scroll::-webkit-scrollbar {
+  display: block !important;
+  width: 5px !important;
+  height: 5px !important;
+}
+
+.cyber-scroll::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.7) !important;
+  border-radius: 9999px !important;
+}
+
+.cyber-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #06b6d4, #f43f5e) !important;
+  border-radius: 9999px !important;
+  box-shadow: inset 0 0 6px rgba(6, 182, 212, 0.5) !important;
+}
+
+.cyber-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #00f0ff, #ff2e93) !important;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.8) !important;
+}
+
+/* Subtle cyan ripple expansion effect on click */
+.cyber-ripple-effect {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 240, 255, 0.35) 0%, rgba(244, 63, 94, 0.08) 60%, rgba(0, 0, 0, 0) 100%);
+  border: 1.5px solid rgba(0, 240, 255, 0.5);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+  transform: translate(-50%, -50%) rotate(var(--ripple-rotate, 0deg));
+  animation: cyber-ripple-expand 0.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+  pointer-events: none;
+  z-index: 45;
+}
+
+@keyframes cyber-ripple-expand {
+  0% {
+    width: 0px;
+    height: 0px;
+    opacity: 0.85;
+    transform: translate(-50%, -50%) rotate(var(--ripple-rotate, 0deg)) scale(0.3);
+  }
+  100% {
+    width: 280px;
+    height: 280px;
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(calc(var(--ripple-rotate, 0deg) + var(--ripple-spin, 45deg))) scale(1);
+  }
+}

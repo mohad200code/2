@@ -11,14 +11,10 @@ export const ShandongAzumLogo: React.FC<ShandongAzumLogoProps> = ({
   showText = true,
   theme
 }) => {
-  // If theme is explicitly passed, use it, otherwise fall back to tailwind's dark: mode
-  const textClassShan = theme 
-    ? (theme === 'day' ? 'text-black' : 'text-white')
-    : 'text-black dark:text-white';
-    
-  const textClassAzum = theme
-    ? (theme === 'day' ? 'text-black' : 'text-slate-200')
-    : 'text-black dark:text-slate-200';
+  const isDarkOrCyber = theme === 'night' || theme === 'cyberpunk';
+  const textClassShan = isDarkOrCyber ? 'text-white' : 'text-black';
+  const textClassAzum = isDarkOrCyber ? 'text-white' : 'text-black';
+  const textClassSub = isDarkOrCyber ? 'text-white' : 'text-black';
 
   return (
     <div className={`inline-flex items-center gap-4 ${className}`}>
@@ -66,7 +62,7 @@ export const ShandongAzumLogo: React.FC<ShandongAzumLogoProps> = ({
             Azum
           </div>
           {/* Subtitle */}
-          <div className="text-[8px] font-sans font-medium tracking-wider uppercase text-slate-500 mt-1">
+          <div className={`text-[8px] font-sans font-medium tracking-wider uppercase mt-1 ${textClassSub}`}>
             your Solution for global import
           </div>
         </div>

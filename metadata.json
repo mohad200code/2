@@ -1,6 +1,6 @@
 {
   "name": "sdazum Store & Admin",
   "description": "Premium multi-language athletic gear portal featuring Day/Night/Cyberpunk themes, star rating review comments, an instant automated microservice digital delivery terminal, integrated AI Store assistant, custom product hosting, secure wallet buy mechanisms, and commission-tracking affiliate hubs.",
-  "requestFramePermissions": ["microphone"],
+  "requestFramePermissions": ["microphone", "camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

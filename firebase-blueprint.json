@@ -1,0 +1,57 @@
+{
+  "entities": {
+    "products": {
+      "title": "Machinery Product",
+      "description": "Industrial heavy machinery and components list.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "name_zh": { "type": "string" },
+        "name_ar": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "stock": { "type": "number" }
+      },
+      "required": ["id", "name", "price"]
+    },
+    "users": {
+      "title": "User Profile",
+      "description": "Secure user profiles with role attributes.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["uid", "email"]
+    },
+    "activities": {
+      "title": "Customer Activity",
+      "description": "Real-time records of customer actions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "type", "description"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "products",
+      "description": "Collection of all industrial machinery items."
+    },
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "Collection of registered user profiles."
+    },
+    "/activities/{activityId}": {
+      "schema": "activities",
+      "description": "Collection of real-time Customer Activity Tracker logs."
+    }
+  }
+}

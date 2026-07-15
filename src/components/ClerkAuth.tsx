@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { ShieldCheck, ChevronRight, ArrowLeft, Sparkles, MailOpen, LockKeyhole, Eye, EyeOff } from 'lucide-react';
+import { ShandongAzumLogo } from './ShandongAzumLogo';
 
 // Custom high-quality vector brand icons
 const GoogleIcon = () => (
@@ -76,6 +77,7 @@ interface ClerkAuthProps {
   onGoogleAuth?: () => void;
   initialIsSignUp?: boolean;
   language?: 'en' | 'zh' | 'ar';
+  theme?: 'day' | 'night' | 'cyberpunk';
 }
 
 const clerkTranslations = {
@@ -87,7 +89,7 @@ const clerkTranslations = {
     verifyingCode: "Verifying Code...",
     backToSignUp: "← Back to Sign Up",
     createAccount: "Create your account",
-    signInToNike: "Sign in to Sdazum",
+    signInToNike: "Sign in to Shandong Azum",
     welcomeText: "Welcome! Please register or sign in with your secure operator account or Google.",
     socialIdentity: "Continue with Social Identity",
     orEmailPass: "or email & password",
@@ -98,7 +100,7 @@ const clerkTranslations = {
     signUpBtn: "Sign Up Operator",
     signInBtn: "Sign In Operator",
     alreadyHaveAccount: "Already have an account?",
-    newToNike: "New to Sdazum's digital portal?",
+    newToNike: "New to Shandong Azum's digital portal?",
     signInLink: "Sign in",
     signUpLink: "Sign up",
     securedBy: "Secured and powered by",
@@ -120,7 +122,7 @@ const clerkTranslations = {
     verifyingCode: "正在验证代码...",
     backToSignUp: "← 返回注册",
     createAccount: "创建您的账户",
-    signInToNike: "登录到 Sdazum",
+    signInToNike: "登录到 Shandong Azum",
     welcomeText: "欢迎！请使用您的操作员安全账户或谷歌账号注册或登录。",
     socialIdentity: "继续使用社交身份登录",
     orEmailPass: "或使用电子邮箱和密码",
@@ -131,7 +133,7 @@ const clerkTranslations = {
     signUpBtn: "注册操作员",
     signInBtn: "登录操作员",
     alreadyHaveAccount: "已经有账户？",
-    newToNike: "第一次来到 Sdazum 数码商城？",
+    newToNike: "第一次来到 Shandong Azum 数码商城？",
     signInLink: "登录",
     signUpLink: "注册",
     securedBy: "安全保障由...提供",
@@ -180,8 +182,24 @@ const clerkTranslations = {
   }
 };
 
-export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoogleAuth, initialIsSignUp = false, language = 'en' }) => {
+export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoogleAuth, initialIsSignUp = false, language = 'en', theme = 'day' }) => {
   const t = clerkTranslations[language];
+
+  const isNight = theme === 'night';
+  const isCyber = theme === 'cyberpunk';
+
+  const textTitleClass = isNight ? 'text-white' : isCyber ? 'text-[#00f0ff]' : 'text-slate-900';
+  const textSubClass = isNight ? 'text-slate-400' : isCyber ? 'text-[#00f0ff]/80' : 'text-slate-500';
+  const labelClass = `text-[10px] font-bold uppercase tracking-wider ${
+    isNight ? 'text-slate-300' : isCyber ? 'text-[#00f0ff]/70' : 'text-slate-500'
+  }`;
+  const inputClass = `w-full px-4 py-3 rounded-xl border outline-none text-sm transition-all shadow-inner focus:shadow-none ${
+    isNight
+      ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500 focus:bg-slate-900'
+      : isCyber
+        ? 'bg-[#0a0311] border-[#00f0ff]/30 text-[#00f0ff] focus:border-[#00f0ff] focus:bg-[#120521] placeholder-[#00f0ff]/40'
+        : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-slate-800 focus:bg-white'
+  }`;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -204,6 +222,9 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
   const [debugOtp, setDebugOtp] = useState<string | undefined>(undefined);
   const [isOtpSimulated, setIsOtpSimulated] = useState(true);
   const [otpError, setOtpError] = useState('');
+  const [showGmailToast, setShowGmailToast] = useState(false);
+  const [toastCode, setToastCode] = useState('');
+  const [showDevDetails, setShowDevDetails] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,6 +266,10 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
         setIsVerifyingOtp(true);
         setOtpSentTo(data.email || email);
         setDebugOtp(data.debugCode);
+        setToastCode(data.debugCode || '');
+        if (data.isSimulated && data.debugCode) {
+          setShowGmailToast(true);
+        }
         setIsOtpSimulated(!!data.isSimulated);
         setError('');
       } else {
@@ -314,7 +339,13 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
   ];
 
   return (
-    <div id="clerk-auth-container" className="grid grid-cols-1 lg:grid-cols-12 min-h-screen bg-white font-sans">
+    <div id="clerk-auth-container" className={`grid grid-cols-1 lg:grid-cols-12 min-h-screen font-sans transition-colors duration-300 ${
+      theme === 'night' 
+        ? 'bg-[#0b0f19] text-slate-100' 
+        : theme === 'cyberpunk'
+          ? 'bg-black text-[#00f0ff]'
+          : 'bg-white text-slate-900'
+    }`}>
       
       {/* 1. Left Side: Real High-Resolution Graphic / Image Column (Requested "Really Image") */}
       <div className="hidden lg:flex lg:col-span-5 relative bg-slate-950 overflow-hidden flex-col justify-between p-12 text-white">
@@ -328,9 +359,7 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
         
         {/* Top Branding Section */}
         <div className="relative z-10 flex items-center gap-3">
-          <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white font-black border border-white/20 text-lg shadow-inner">
-            S
-          </div>
+          <ShandongAzumLogo className="h-10" theme="night" showText={false} />
           <span className="font-extrabold tracking-tight text-xl text-white drop-shadow-sm">Sdazum.com</span>
         </div>
 
@@ -340,7 +369,7 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
             <Sparkles className="w-3 h-3" /> Exclusive Athlete Pass
           </div>
           <h1 className="text-3xl font-black tracking-tight leading-tight text-white drop-shadow-md">
-            Shandong azum import and export trade Co., Ltd
+            Shandong Azum import and export trade Co., Ltd
           </h1>
           <p className="text-slate-200 text-sm leading-relaxed font-medium">
             Join the community to unlock specialized gear drops, faster checkout lanes, and personalized size-recommender tools.
@@ -377,35 +406,53 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
       </div>
 
       {/* 2. Right Side: Auth Form Column */}
-      <div className="col-span-1 lg:col-span-7 flex items-center justify-center p-6 sm:p-12 md:p-16 bg-slate-50 relative min-h-screen">
+      <div className={`col-span-1 lg:col-span-7 flex items-center justify-center p-6 sm:p-12 md:p-16 relative min-h-screen transition-colors duration-300 ${
+        theme === 'night'
+          ? 'bg-[#0f172a]'
+          : theme === 'cyberpunk'
+            ? 'bg-black'
+            : 'bg-slate-50'
+      }`}>
         
         {/* Floating Close / Back to Store button */}
         <button 
           onClick={onClose}
-          className="absolute top-6 right-6 p-2.5 bg-white hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-800 rounded-full shadow-sm hover:shadow transition-all duration-200 cursor-pointer flex items-center justify-center group"
+          className={`absolute top-6 right-6 p-2.5 rounded-full shadow-sm hover:shadow transition-all duration-200 cursor-pointer flex items-center justify-center group border ${
+            theme === 'night'
+              ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300 hover:text-white'
+              : theme === 'cyberpunk'
+                ? 'bg-purple-950/40 hover:bg-purple-900/60 border-[#f43f5e]/40 text-[#00f0ff] hover:text-white shadow-[0_0_10px_rgba(244,63,94,0.1)]'
+                : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-800'
+          }`}
           title="Back to store"
         >
           <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
         </button>
 
-        <div id="clerk-auth-card" className="w-full max-w-md bg-white rounded-3xl border border-slate-200 shadow-xl p-8 md:p-10 flex flex-col transition-all">
+        <div id="clerk-auth-card" className={`w-full max-w-md rounded-3xl p-8 md:p-10 flex flex-col transition-all border shadow-xl ${
+          theme === 'night'
+            ? 'bg-[#1e293b]/90 border-slate-800 text-slate-100 shadow-slate-950/20'
+            : theme === 'cyberpunk'
+              ? 'bg-[#12041e]/80 border-[#f43f5e]/40 text-[#00f0ff] shadow-[0_0_25px_rgba(244,63,94,0.15)] backdrop-blur-md'
+              : 'bg-white border-slate-200 text-slate-900 shadow-slate-200/50'
+        }`}>
           {isVerifyingOtp ? (
             <div className="space-y-6">
               <div className="text-center pb-4">
                 <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-xl font-black mx-auto mb-4 shadow-md shadow-indigo-100 animate-bounce">
                   <MailOpen className="w-6 h-6" />
                 </div>
-                <h2 id="verify-title" className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                <h2 id="verify-title" className={`text-2xl font-extrabold tracking-tight ${textTitleClass}`}>
                   {t.verifyTitle}
                 </h2>
-                <p id="verify-subtitle" className="text-xs text-slate-500 mt-1.5 font-medium leading-relaxed">
-                  {t.verifySubtitle} <strong className="text-slate-800">{otpSentTo}</strong>.
+                <p id="verify-subtitle" className={`text-xs mt-1.5 font-medium leading-relaxed ${textSubClass}`}>
+                  {t.verifySubtitle} <strong className={theme === 'day' ? 'text-slate-800' : 'text-slate-200'}>{otpSentTo}</strong>.
                 </p>
               </div>
 
               <form id="clerk-otp-form" onSubmit={handleOtpSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block text-center">
+                  <label className={`text-[10px] font-bold uppercase tracking-wider block text-center ${labelClass}`}>
                     {t.enterCode}
                   </label>
                   <input
@@ -415,7 +462,13 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
                     placeholder="••••••"
                     value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full px-4 py-3.5 text-center tracking-[0.5em] font-mono text-xl bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:border-slate-800 outline-none text-slate-800 transition-all shadow-inner focus:shadow-none"
+                    className={`w-full px-4 py-3.5 text-center tracking-[0.5em] font-mono text-xl rounded-xl border outline-none transition-all shadow-inner focus:shadow-none ${
+                      theme === 'night'
+                        ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500 focus:bg-slate-900'
+                        : theme === 'cyberpunk'
+                          ? 'bg-[#0a0311] border-[#00f0ff]/30 text-[#00f0ff] focus:border-[#00f0ff] focus:bg-[#120521] placeholder-[#00f0ff]/40'
+                          : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-slate-800 focus:bg-white'
+                    }`}
                     disabled={isLoading}
                     autoFocus
                   />
@@ -427,15 +480,38 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
                 </div>
 
                 {debugOtp && (
-                  <div className="bg-indigo-50 border border-indigo-150 rounded-2xl p-4 text-xs text-indigo-700 space-y-1.5 leading-relaxed">
-                    <span className="font-bold flex items-center gap-1.5 text-indigo-800">
-                      <LockKeyhole className="w-3.5 h-3.5" /> {t.sandboxBypass}
-                    </span>
-                    <p>{t.sandboxBypassText}</p>
-                    <div className="flex items-center justify-between bg-white border border-indigo-200 px-3 py-2 rounded-xl font-mono text-sm font-black text-indigo-950 mt-1 select-all shadow-sm">
-                      <span>{debugOtp}</span>
-                      <span className="text-[9px] text-indigo-500 font-sans uppercase tracking-wider font-bold">{t.copyCode}</span>
-                    </div>
+                  <div className={`border rounded-2xl p-3 text-xs space-y-1 ${
+                    theme === 'night' 
+                      ? 'border-slate-700 bg-slate-900/50 text-slate-400' 
+                      : theme === 'cyberpunk'
+                        ? 'border-[#00f0ff]/30 bg-black/50 text-[#00f0ff]/80'
+                        : 'border-slate-200 bg-slate-50 text-slate-500'
+                  }`}>
+                    <button
+                      type="button"
+                      onClick={() => setShowDevDetails(!showDevDetails)}
+                      className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-slate-600 flex items-center gap-1 cursor-pointer focus:outline-none"
+                    >
+                      <span>{showDevDetails ? "Hide" : "Show"} Developer Sandbox Code</span>
+                    </button>
+                    {showDevDetails && (
+                      <div className="mt-2 space-y-1.5 pt-1.5 border-t border-slate-200/60 leading-relaxed">
+                        <span className="font-bold flex items-center gap-1.5 text-slate-700">
+                          <LockKeyhole className="w-3 h-3 text-slate-500" /> Sandbox Credentials
+                        </span>
+                        <p className="text-[11px] text-slate-400">{t.sandboxBypassText}</p>
+                        <div className={`flex items-center justify-between border px-3 py-2 rounded-xl font-mono text-sm font-black select-all shadow-sm ${
+                          theme === 'night'
+                            ? 'bg-slate-950 border-slate-700 text-indigo-400'
+                            : theme === 'cyberpunk'
+                              ? 'bg-[#0a0311] border-[#00f0ff]/40 text-[#00f0ff]'
+                              : 'bg-white border-slate-200 text-slate-700'
+                        }`}>
+                          <span>{debugOtp}</span>
+                          <span className="text-[9px] text-slate-400 font-sans uppercase tracking-wider font-bold">{t.copyCode}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -473,67 +549,24 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
             </div>
           ) : (
             <>
-              <div className="text-center pb-6">
-                <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center text-xl font-black mx-auto mb-4 shadow-md">
-                  S
+              <div className="text-center pb-6 flex flex-col items-center">
+                <div className="mb-4">
+                  <ShandongAzumLogo className="h-14 md:h-16" theme={theme} showText={true} />
                 </div>
-                <h2 id="clerk-title" className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                <h2 id="clerk-title" className={`text-2xl font-extrabold tracking-tight ${textTitleClass}`}>
                   {isSignUp ? t.createAccount : t.signInToNike}
                 </h2>
-                <p id="clerk-subtitle" className="text-xs text-slate-500 mt-1.5 font-medium">
+                <p id="clerk-subtitle" className={`text-xs mt-1.5 font-medium ${textSubClass}`}>
                   {t.welcomeText}
                 </p>
               </div>
 
               <div className="space-y-6">
                 
-                {/* Social Logins Grid - Crisp SVG Logos with light-styled buttons */}
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center mb-3">
-                    {t.socialIdentity}
-                  </p>
-                  <div id="clerk-socials" className="grid grid-cols-3 gap-2.5">
-                    {socialLogins.map((social) => (
-                      <button
-                        key={social.name}
-                        id={`social-${social.name.toLowerCase()}`}
-                        type="button"
-                        onClick={() => {
-                          setSocialPopup({
-                            provider: social.name,
-                            email: '',
-                            name: '',
-                            password: ''
-                          });
-                        }}
-                        className="py-3 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center transition-all hover:shadow-sm duration-150 cursor-pointer active:scale-95 group/btn"
-                        title={social.name === 'Google' ? "Connect real Google account" : `Continue with simulated ${social.name}`}
-                      >
-                        <span className="flex items-center justify-center relative">
-                          {social.icon}
-                          {social.name === 'Google' && (
-                            <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Separator */}
-                <div className="flex items-center justify-center gap-3">
-                  <div className="h-px bg-slate-200 flex-1"></div>
-                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">{t.orEmailPass}</span>
-                  <div className="h-px bg-slate-200 flex-1"></div>
-                </div>
-
                 {/* Email input form */}
                 <form id="clerk-form" onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    <label className={labelClass}>
                       {t.emailAddress}
                     </label>
                     <input
@@ -542,14 +575,14 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
                       placeholder="name@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:border-slate-800 outline-none text-sm text-slate-800 transition-all shadow-inner focus:shadow-none"
+                      className={inputClass}
                       disabled={isLoading}
                     />
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                      <label className={labelClass}>
                         {t.password}
                       </label>
                       {!isSignUp && (
@@ -565,7 +598,7 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-4 pr-11 py-3 bg-slate-50 focus:bg-white rounded-xl border border-slate-200 focus:border-slate-800 outline-none text-sm text-slate-800 transition-all shadow-inner focus:shadow-none"
+                        className={`${inputClass} pr-11`}
                         disabled={isLoading}
                       />
                       <button
@@ -609,7 +642,7 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
 
                 {/* Mode toggling text */}
                 <div className="text-center pt-2">
-                  <p id="clerk-toggle-mode" className="text-xs text-slate-500 font-medium">
+                  <p id="clerk-toggle-mode" className={`text-xs font-medium ${textSubClass}`}>
                     {isSignUp ? t.alreadyHaveAccount : t.newToNike}{' '}
                     <span
                       onClick={() => {
@@ -686,7 +719,7 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
                   </h3>
                   
                   <p className="text-[10px] opacity-75 mt-1">
-                    To complete security registration for Sdazum Digital Portal
+                    To complete security registration for Shandong Azum Digital Portal
                   </p>
                 </div>
 
@@ -814,6 +847,44 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
           )}
         </div>
       </div>
+      
+      {showGmailToast && (
+        <div className="fixed top-6 right-6 z-50 max-w-sm bg-slate-900 border border-slate-800 text-white p-4 rounded-2xl shadow-2xl flex gap-3.5 animate-slide-in-right select-none">
+          <div className="shrink-0 w-10 h-10 bg-rose-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+            M
+          </div>
+          <div className="flex-1 space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-xs text-slate-100 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                <span>Gmail • Shandong Azum Portal</span>
+              </span>
+              <span className="text-[9px] text-slate-400 font-mono">Just now</span>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-normal">
+              Your secure 6-digit verification code is <strong className="text-[#00f0ff] font-mono tracking-wider text-xs">{toastCode}</strong>.
+            </p>
+            <div className="pt-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setOtpCode(toastCode);
+                  setShowGmailToast(false);
+                }}
+                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-[#00f0ff] font-bold px-2 py-1 rounded border border-[#00f0ff]/20 hover:border-[#00f0ff]/40 transition-all cursor-pointer"
+              >
+                Auto-Fill Code
+              </button>
+            </div>
+          </div>
+          <button 
+            onClick={() => setShowGmailToast(false)} 
+            className="text-slate-400 hover:text-white text-xs font-bold shrink-0 p-1 cursor-pointer align-top self-start"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 };

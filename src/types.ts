@@ -26,6 +26,7 @@ export interface Product {
   salesCount?: number; // How many people bought this product
   stock?: number; // Real-time inventory tracking level
   reviews?: ProductReview[]; // Customer comments and stars
+  customBadge?: string; // Admin bulk custom labels
   name_en?: string;
   name_zh?: string;
   name_ar?: string;
@@ -55,7 +56,7 @@ export interface User {
 export interface Order {
   id: string;
   total: number;
-  status: 'success' | 'failed' | 'pending';
+  status: 'success' | 'failed' | 'pending' | 'Processing' | 'Delivered';
   date: string;
   products: { name: string; quantity: number; size: string; color: string; price: number; customName?: string; image?: string }[];
   address: {
