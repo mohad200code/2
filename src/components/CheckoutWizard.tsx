@@ -324,14 +324,32 @@ export const CheckoutWizard: React.FC<CheckoutWizardProps> = ({
           }),
         });
 
-        data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Payment transaction failed. Please verify your credentials.');
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Payment transaction failed. Please verify your credentials.');
+          }
+        } else {
+          const respText = await response.text();
+          if (respText.includes('The page c') || respText.includes('not found') || response.status === 404 || respText.includes('<!DOCTYPE html>')) {
+            throw new Error('Failed to fetch (API gateway returned HTML/Offline)');
+          } else {
+            throw new Error(respText.slice(0, 100) || 'API returned invalid response format.');
+          }
         }
       } catch (fetchErr: any) {
         const errMsg = fetchErr?.message || '';
-        if (errMsg === 'Failed to fetch' || errMsg.includes('fetch') || errMsg.includes('NetworkError') || errMsg.includes('Failed to load')) {
-          console.warn('[PAYMENT FALLBACK] Secure endpoint offline or unreachable. Simulating payment locally.');
+        if (
+          errMsg === 'Failed to fetch' || 
+          errMsg.includes('fetch') || 
+          errMsg.includes('NetworkError') || 
+          errMsg.includes('Failed to load') ||
+          errMsg.includes('Unexpected token') ||
+          errMsg.includes('is not valid JSON') ||
+          fetchErr instanceof SyntaxError
+        ) {
+          console.warn('[PAYMENT FALLBACK] Secure endpoint offline, unreachable, or returning HTML. Simulating payment locally.');
           data = {
             transactionId: 'TXN-FALLBACK-' + Math.random().toString(36).substr(2, 9),
             gateway: 'Simulated Client Sandbox',

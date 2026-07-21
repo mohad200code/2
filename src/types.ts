@@ -27,6 +27,7 @@ export interface Product {
   stock?: number; // Real-time inventory tracking level
   reviews?: ProductReview[]; // Customer comments and stars
   customBadge?: string; // Admin bulk custom labels
+  autoRestockEnabled?: boolean; // Flag to toggle automatic restock for this product
   name_en?: string;
   name_zh?: string;
   name_ar?: string;

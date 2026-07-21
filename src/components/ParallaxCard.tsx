@@ -123,13 +123,7 @@ export const ParallaxCard: React.FC<ParallaxCardProps> = ({
       onMouseLeave={handleMouseLeave}
       layoutId={layoutId}
       style={{
-        rotateX,
-        rotateY,
-        x: translateX,
-        y: translateY,
         scale,
-        transformStyle: 'preserve-3d',
-        perspective: '1000px',
       }}
       className={`group intense-hover-card all-products-glowing-shadow rounded-3xl p-5 border relative flex flex-col justify-between cursor-pointer transition-shadow duration-300 theme-${theme} ${
         isLoading ? 'is-loading' : ''

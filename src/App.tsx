@@ -49,6 +49,7 @@ import {
   QrCode,
   CheckCircle,
   TrendingUp,
+  TrendingDown,
   Upload,
   Download,
   Shield,
@@ -82,7 +83,16 @@ import {
   CheckSquare,
   Maximize,
   Copy,
-  Filter
+  Filter,
+  BookOpen,
+  Database,
+  Music,
+  Video,
+  Image,
+  FolderHeart,
+  History,
+  Menu,
+  Grid
 } from 'lucide-react';
 
 import { Product, User as UserType, Order, CartItem } from './types';
@@ -623,11 +633,11 @@ function parseCSV(text: string): string[][] {
 }
 
 export default function App() {
-  // Dynamic Styles (Day / Night / Cyberpunk)
-  const [theme, setTheme] = useState<'day' | 'night' | 'cyberpunk'>(() => {
+  // Dynamic Styles (Day / Night / Cyberpunk / Cyberpunk-Light)
+  const [theme, setTheme] = useState<'day' | 'night' | 'cyberpunk' | 'cyberpunk-light'>(() => {
     const saved = localStorage.getItem('cyberport_theme');
-    if (saved === 'day' || saved === 'night' || saved === 'cyberpunk') {
-      return saved;
+    if (saved === 'day' || saved === 'night' || saved === 'cyberpunk' || saved === 'cyberpunk-light') {
+      return saved as 'day' | 'night' | 'cyberpunk' | 'cyberpunk-light';
     }
     return 'cyberpunk';
   });
@@ -667,7 +677,47 @@ export default function App() {
 
   const [adminUserStatusFilter, setAdminUserStatusFilter] = useState<'All' | 'Active' | 'Suspended' | 'Pending Verification'>('All');
   const [adminUserQuickFilter, setAdminUserQuickFilter] = useState<string>('');
+  const [adminProductQuickFilter, setAdminProductQuickFilter] = useState<string>('');
   const [sidebarSearchQuery, setSidebarSearchQuery] = useState<string>('');
+
+  const getFilteredSidebarProducts = (productList: Product[]) => {
+    if (!adminProductQuickFilter || !adminProductQuickFilter.trim()) return productList;
+    const q = adminProductQuickFilter.toLowerCase().trim();
+    return productList.filter(p => {
+      const name = (p.name || '').toLowerCase();
+      const category = (p.category || '').toLowerCase();
+      const customBadge = (p.customBadge || '').toLowerCase();
+      const stock = p.stock !== undefined ? p.stock : 0;
+      
+      if (q === 'low' || q === 'low stock' || q === 'low-stock') {
+        return stock < 15;
+      }
+      if (q === 'out' || q === 'out of stock' || q === 'empty') {
+        return stock === 0;
+      }
+      if (q === 'high' || q === 'instock' || q === 'in stock') {
+        return stock >= 15;
+      }
+      
+      return name.includes(q) || category.includes(q) || customBadge.includes(q);
+    });
+  };
+
+  const isCatActive = (catKey: string) => {
+    if (catKey === 'application') {
+      return ['overview', 'inbox', 'chat', 'calendar', 'search', 'settings', 'keep', 'picker'].includes(adminSubView);
+    }
+    if (catKey === 'products') {
+      return ['products', 'analytics', 'add-product', 'add-category'].includes(adminSubView);
+    }
+    if (catKey === 'users') {
+      return ['users', 'add-user'].includes(adminSubView);
+    }
+    if (catKey === 'orders') {
+      return ['transactions', 'add-order'].includes(adminSubView);
+    }
+    return false;
+  };
 
   const getFilteredUsers = (userList: any[]) => {
     if (!adminUserQuickFilter || !adminUserQuickFilter.trim()) return userList;
@@ -882,6 +932,13 @@ export default function App() {
     description: true,
   });
   const [showAdminStockTrend, setShowAdminStockTrend] = useState<boolean>(false);
+  const [isLowStockAutoRestockEnabled, setIsLowStockAutoRestockEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('azum_auto_restock_enabled') !== 'false';
+  });
+  const [lowStockAutoRestockThreshold, setLowStockAutoRestockThreshold] = useState<number>(() => {
+    return parseInt(localStorage.getItem('azum_auto_restock_threshold') || '10');
+  });
+  const [showDetailPriceSparkline, setShowDetailPriceSparkline] = useState<boolean>(false);
   const [productsLoaded, setProductsLoaded] = useState<boolean>(false);
   
   const [adminInbox, setAdminInbox] = useState<any[]>(() => {
@@ -941,6 +998,12 @@ export default function App() {
       body.style.color = '#f1f5f9';
       body.classList.add('dark');
       html.classList.add('dark');
+    } else if (theme === 'cyberpunk-light') {
+      // Cyberpunk Light Mode styling: light off-white/rose canvas, black and vibrant neon hot pink text/accents
+      body.style.backgroundColor = '#fff5f7';
+      body.style.color = '#111111';
+      body.classList.remove('dark');
+      html.classList.remove('dark');
     } else {
       body.style.backgroundColor = '#000000';
       body.style.color = '#00f0ff';
@@ -2681,6 +2744,27 @@ export default function App() {
 
   // AI Store Assistant Floating chatbot states
   const [isAiOpen, setIsAiOpen] = useState<boolean>(false);
+  
+  // NEW ADVANCED GEMINI STATES (17 MODERN FEATURES & SIDEBAR INTEGRATION)
+  const [isGeminiSidebarExpanded, setIsGeminiSidebarExpanded] = useState<boolean>(true);
+  const [geminiActiveView, setGeminiActiveView] = useState<'chat' | 'images' | 'music' | 'video' | 'notebooks' | 'library' | 'firebase'>('chat');
+  const [geminiModel, setGeminiModel] = useState<'gemini-3.5-flash' | 'gemini-3.1-flash-lite' | 'gemini-3.1-pro-preview' | 'extended-thinking' | 'live'>('gemini-3.5-flash');
+  const [googleSearchGrounding, setGoogleSearchGrounding] = useState<boolean>(false);
+  const [googleMapsGrounding, setGoogleMapsGrounding] = useState<boolean>(false);
+  const [selectedAspect, setSelectedAspect] = useState<string>('1:1');
+  const [selectedQuality, setSelectedQuality] = useState<string>('1K');
+  const [musicType, setMusicType] = useState<'clip' | 'pro'>('clip');
+  const [videoAspect, setVideoAspect] = useState<string>('16:9');
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState<boolean>(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
+  const [geminiHistory, setGeminiHistory] = useState<string[]>([
+    "Cool Car Image Generation", 
+    "البحث عن الملكة خديعة", 
+    "hi bro can you make for me JARVIS AI", 
+    "Product sales optimization logs"
+  ]);
+  const [searchHistoryQuery, setSearchHistoryQuery] = useState<string>('');
+
   const [aiInput, setAiInput] = useState<string>('');
   const [aiMessages, setAiMessages] = useState<{ sender: 'user' | 'ai'; text: string; date: string }[]>(() => {
     const saved = localStorage.getItem('cyberport_ai_messages');
@@ -3503,6 +3587,28 @@ export default function App() {
     }
   };
 
+  // Auto-Restock monitor effect
+  useEffect(() => {
+    if (!isLowStockAutoRestockEnabled) return;
+    
+    products.forEach(p => {
+      const threshold = lowStockAutoRestockThreshold;
+      const isBelowThreshold = p.stock !== undefined && p.stock < threshold;
+      const isAutoRestockProductEnabled = p.autoRestockEnabled !== false;
+      
+      if (isBelowThreshold && isAutoRestockProductEnabled) {
+        // Prevent multiple simultaneous restocks for the same product in progress
+        if ((window as any)[`restocking_${p.id}`]) return;
+        (window as any)[`restocking_${p.id}`] = true;
+        
+        triggerToast(`Auto-restock triggered: ${p.name} stock (${p.stock}) fell below threshold (${threshold})! Sending supplier email...`, "success");
+        handleRequestRestock(p).finally(() => {
+          delete (window as any)[`restocking_${p.id}`];
+        });
+      }
+    });
+  }, [products, isLowStockAutoRestockEnabled, lowStockAutoRestockThreshold]);
+
   const handleReorder = (sourceId: string, targetId: string) => {
     setProducts(prevProducts => {
       const sourceIndex = prevProducts.findIndex(p => p.id === sourceId);
@@ -4067,7 +4173,7 @@ export default function App() {
     const imageBase64 = captureCameraFrame();
     const currentUserName = currentUser ? (currentUser.name || currentUser.email.split('@')[0]) : 'Operator';
 
-    // Call the real backend Gemini chat API first!
+    // Call the real backend Gemini chat API first with advanced capabilities
     fetch("/api/gemini/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -4075,7 +4181,14 @@ export default function App() {
         prompt: userMsg, 
         chatHistory: nextMessages,
         userName: currentUserName,
-        image: imageBase64
+        image: imageBase64,
+        model: geminiModel,
+        searchGrounding: googleSearchGrounding,
+        mapsGrounding: googleMapsGrounding,
+        thinkingLevel: geminiModel === 'extended-thinking' ? 'HIGH' : 'OFF',
+        generateImage: { enabled: geminiActiveView === 'images', aspect: selectedAspect, quality: selectedQuality },
+        generateMusic: { enabled: geminiActiveView === 'music', type: musicType },
+        generateVideo: { enabled: geminiActiveView === 'video', aspect: videoAspect }
       })
     })
       .then(async (res) => {
@@ -4093,7 +4206,11 @@ export default function App() {
           const finalMsgs = [...nextMessages, {
             sender: 'ai' as const,
             text: aiResponseText,
-            date: new Date().toLocaleTimeString()
+            date: new Date().toLocaleTimeString(),
+            mediaType: data.mediaType,
+            mediaUrl: data.mediaUrl,
+            musicLyrics: data.musicLyrics,
+            videoAspect: data.videoAspect
           }];
           setAiMessages(finalMsgs);
           localStorage.setItem('cyberport_ai_messages', JSON.stringify(finalMsgs));
@@ -6010,7 +6127,7 @@ export default function App() {
                       const commentsCount = (reviewsDB[p.id] || p.reviews || []).length;
                       return (
                       <motion.div
-                        id="product-card-container"
+                        id={`product-card-container-${p.id}`}
                         key={p.id}
                         variants={{
                           hidden: { opacity: 0, y: 30 },
@@ -6024,7 +6141,7 @@ export default function App() {
                             }
                           }
                         }}
-                        whileHover={{ y: -8, scale: 1.015 }}
+                        whileHover={{ y: -6 }}
                         draggable={isMohab}
                         onDragStart={(e) => {
                           if (!isMohab) return;
@@ -6312,6 +6429,17 @@ export default function App() {
                               <span className="px-1.5 py-0.5 bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/20 rounded text-[9px] font-bold font-mono">
                                 🔥 {recentViews[p.id] || 42} views
                               </span>
+
+                              {/* Stock Display with brief highlight effect on value change */}
+                              <span className={`px-1.5 py-0.5 border rounded text-[9px] font-bold font-mono transition-all duration-300 flex items-center gap-1 ${
+                                blinkProductId === p.id 
+                                  ? 'animate-stock-highlight text-amber-300' 
+                                  : (p.stock !== undefined && p.stock < 15)
+                                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                    : 'bg-slate-900/40 text-slate-400 border-slate-800'
+                              }`}>
+                                📦 {p.stock !== undefined ? `${p.stock} units` : '0 units'}
+                              </span>
                             </div>
 
                             <h4 
@@ -6549,9 +6677,39 @@ export default function App() {
                   </div>
                 </div>
 
-                <p id="details-price" className="text-3xl font-black text-pink-400 font-mono">
-                  {formatPrice(selectedProduct.price)}
-                </p>
+                <div className="flex flex-wrap items-center gap-4">
+                  <p id="details-price" className="text-3xl font-black text-pink-400 font-mono">
+                    {formatPrice(selectedProduct.price)}
+                  </p>
+
+                  <button
+                    onClick={() => {
+                      setShowDetailPriceSparkline(prev => !prev);
+                      triggerToast(`${!showDetailPriceSparkline ? 'Enabled' : 'Disabled'} price trend visualization for ${selectedProduct.name}`, "success");
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-mono font-bold tracking-wider uppercase transition-all flex items-center gap-1.5 cursor-pointer border ${
+                      showDetailPriceSparkline 
+                        ? 'bg-pink-600 text-white border-pink-500 hover:bg-pink-500' 
+                        : 'bg-slate-900/60 text-[#00f0ff] border-slate-800 hover:border-[#00f0ff]'
+                    }`}
+                  >
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>{showDetailPriceSparkline ? 'Hide Price Trend' : 'Analyze Price Trend'}</span>
+                  </button>
+                </div>
+
+                {showDetailPriceSparkline && (
+                  <div className="p-4 bg-slate-950/60 rounded-2xl border border-slate-850 mt-2">
+                    <span className="text-[10px] font-mono font-black text-slate-400 block uppercase mb-2 tracking-wider">
+                      📈 7-Day Precision Price Trend Sparkline
+                    </span>
+                    <PriceSparkline
+                      basePrice={selectedProduct.price}
+                      productId={selectedProduct.id}
+                      theme={theme}
+                    />
+                  </div>
+                )}
 
                 <p id="details-description" className={`text-xs leading-relaxed font-sans ${theme === 'day' ? 'text-slate-950 font-normal' : 'text-slate-300'}`}>
                   {selectedProduct[`desc_${language}` as keyof typeof selectedProduct] || selectedProduct.description}
@@ -7563,7 +7721,9 @@ export default function App() {
                             {!isSidebarCollapsed ? (
                               <button 
                                 onClick={() => setIsApplicationExpanded(!isApplicationExpanded)}
-                                className={`w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/30 rounded-lg text-left cursor-pointer group transition-all`}
+                                className={`w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/30 rounded-lg text-left cursor-pointer group transition-all ${
+                                  isCatActive('application') ? 'sidebar-accordion-active' : ''
+                                }`}
                               >
                                 <p className={`text-[10px] font-bold uppercase tracking-wider ${
                                   sidebarTheme === 'Cyberpunk' ? 'text-pink-500 font-mono' : 'text-slate-500 dark:text-slate-600'
@@ -7725,7 +7885,9 @@ export default function App() {
                             {!isSidebarCollapsed ? (
                               <button 
                                 onClick={() => setIsProductsExpanded(!isProductsExpanded)}
-                                className={`w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/30 rounded-lg text-left cursor-pointer group transition-all`}
+                                className={`w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/30 rounded-lg text-left cursor-pointer group transition-all ${
+                                  isCatActive('products') ? 'sidebar-accordion-active' : ''
+                                }`}
                               >
                                 <div className="flex items-center gap-1.5">
                                   <p className={`text-[10px] font-bold uppercase tracking-wider ${
@@ -7756,6 +7918,61 @@ export default function App() {
                                   transition={{ duration: 0.25, ease: "easeInOut" }}
                                   className={`overflow-hidden space-y-1 mt-1 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}
                                 >
+                                  {!isSidebarCollapsed && (
+                                    <div className="products-quick-filter-input-wrapper px-3 py-1 bg-slate-950/30 rounded-lg mx-2 my-1 border border-slate-800/40 flex items-center gap-1.5 cursor-pointer">
+                                      <Filter className="w-3 h-3 text-slate-500 shrink-0" />
+                                      <input
+                                        type="text"
+                                        value={adminProductQuickFilter}
+                                        onChange={(e) => setAdminProductQuickFilter(e.target.value)}
+                                        placeholder="Quick Filter (e.g. low-stock)"
+                                        className="w-full bg-transparent border-none p-0 text-[10px] font-mono outline-none focus:outline-none focus:ring-0 text-slate-300 placeholder-slate-500"
+                                        title="Filter products instantly by attributes like name, category, low-stock, or out-of-stock"
+                                      />
+                                      
+                                      {/* Dynamic stock count badge and animated trend arrow icon */}
+                                      {(() => {
+                                        const filteredProds = getFilteredSidebarProducts(products);
+                                        const totalFilteredStock = filteredProds.reduce((sum, p) => sum + (p.stock || 0), 0);
+                                        const avgFilteredStock = filteredProds.length > 0 ? totalFilteredStock / filteredProds.length : 0;
+                                        const globalTotalStock = products.reduce((sum, p) => sum + (p.stock || 0), 0);
+                                        const globalAvgStock = products.length > 0 ? globalTotalStock / products.length : 0;
+                                        const isIncreasing = avgFilteredStock >= globalAvgStock;
+
+                                        return (
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            <span 
+                                              className="px-1.5 py-0.5 text-[8px] font-bold font-mono rounded bg-indigo-500/20 border border-indigo-500/30 text-indigo-400"
+                                              title={`Total matched stock: ${totalFilteredStock} units`}
+                                            >
+                                              {totalFilteredStock}
+                                            </span>
+                                            {isIncreasing ? (
+                                              <TrendingUp 
+                                                className="w-3.5 h-3.5 text-emerald-400 animate-trend-up" 
+                                                title="Inventory trend is high/increasing relative to average"
+                                              />
+                                            ) : (
+                                              <TrendingDown 
+                                                className="w-3.5 h-3.5 text-rose-400 animate-trend-down" 
+                                                title="Inventory trend is low/decreasing relative to average"
+                                              />
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
+
+                                      {adminProductQuickFilter && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setAdminProductQuickFilter('')}
+                                          className="text-[10px] text-slate-500 hover:text-slate-300 font-bold px-1"
+                                        >
+                                          ✕
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                   {matchesSearch('See All Products') && (
                                     <button
                                       onClick={() => setAdminSubView('products')}
@@ -7837,7 +8054,9 @@ export default function App() {
                             {!isSidebarCollapsed ? (
                               <button 
                                 onClick={() => setIsUsersExpanded(!isUsersExpanded)}
-                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/10 rounded-lg text-left cursor-pointer group transition-all"
+                                className={`w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/10 rounded-lg text-left cursor-pointer group transition-all ${
+                                  isCatActive('users') ? 'sidebar-accordion-active' : ''
+                                }`}
                               >
                                 <div className="flex items-center gap-1.5">
                                   <p className={`text-[10px] font-bold uppercase tracking-wider ${
@@ -7869,7 +8088,7 @@ export default function App() {
                                   className={`overflow-hidden space-y-1 mt-1 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}
                                 >
                               {!isSidebarCollapsed && (
-                                <div className="users-quick-filter-input-wrapper px-3 py-1 bg-slate-950/30 hover:bg-slate-900/50 hover:shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:border-indigo-500/30 rounded-lg mx-2 my-1 border border-slate-800/40 flex items-center gap-1.5 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all duration-300">
+                                <div className="users-quick-filter-input-wrapper px-3 py-1 bg-slate-950/30 rounded-lg mx-2 my-1 border border-slate-800/40 flex items-center gap-1.5 cursor-pointer">
                                   <Filter className="w-3 h-3 text-slate-500 shrink-0" />
                                   <input
                                     type="text"
@@ -8061,7 +8280,9 @@ export default function App() {
                             {!isSidebarCollapsed ? (
                               <button 
                                 onClick={() => setIsOrdersExpanded(!isOrdersExpanded)}
-                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/10 rounded-lg text-left cursor-pointer group transition-all"
+                                className={`w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/10 rounded-lg text-left cursor-pointer group transition-all ${
+                                  isCatActive('orders') ? 'sidebar-accordion-active' : ''
+                                }`}
                               >
                                 <p className={`text-[10px] font-bold uppercase tracking-wider ${
                                   sidebarTheme === 'Cyberpunk' ? 'text-pink-500 font-mono' : 'text-slate-500 dark:text-slate-600'
@@ -9185,6 +9406,44 @@ export default function App() {
                           </label>
                         </div>
 
+                        {/* Low Stock Auto-Restock Toggle Panel */}
+                        <div className="bg-slate-950/40 p-3.5 rounded-xl border border-slate-800/80 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                          <label className="flex items-center gap-2.5 cursor-pointer select-none text-[11px] font-mono font-bold text-slate-300 hover:text-white transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={isLowStockAutoRestockEnabled}
+                              onChange={(e) => {
+                                setIsLowStockAutoRestockEnabled(e.target.checked);
+                                localStorage.setItem('azum_auto_restock_enabled', e.target.checked.toString());
+                                triggerToast(`Low Stock Auto-Restock ${e.target.checked ? 'ENABLED' : 'DISABLED'}`, "success");
+                              }}
+                              className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-emerald-400 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-emerald-500"
+                            />
+                            <span className="flex items-center gap-1.5">
+                              <RefreshCw className="w-3.5 h-3.5 text-emerald-400 animate-spin-slow" />
+                              Enable Low Stock Auto-Restock (Simulate supplier email when units &lt; threshold)
+                            </span>
+                          </label>
+                          {isLowStockAutoRestockEnabled && (
+                            <div className="flex items-center gap-2 font-mono text-[11px]">
+                              <span className="text-slate-400">Restock Threshold:</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max="50"
+                                value={lowStockAutoRestockThreshold}
+                                onChange={(e) => {
+                                  const val = Math.max(1, parseInt(e.target.value) || 5);
+                                  setLowStockAutoRestockThreshold(val);
+                                  localStorage.setItem('azum_auto_restock_threshold', val.toString());
+                                }}
+                                className="w-14 px-2 py-1 bg-slate-900 border border-slate-800 text-emerald-400 rounded-lg outline-none focus:border-[#00f0ff] font-bold text-center"
+                              />
+                              <span className="text-slate-400">units</span>
+                            </div>
+                          )}
+                        </div>
+
                         {/* Admin Table Bulk Action Custom Label Toolbar */}
                         <AnimatePresence>
                           {selectedAdminProducts.length > 0 && (
@@ -9427,6 +9686,28 @@ export default function App() {
                                         }`}>
                                           {p.stock !== undefined ? p.stock : 0} units
                                         </span>
+
+                                        {/* Per-Product Auto-Restock override checkbox */}
+                                        <label className="flex items-center gap-1.5 cursor-pointer select-none text-[9px] text-slate-400 hover:text-emerald-400 transition-colors mt-1">
+                                          <input
+                                            type="checkbox"
+                                            checked={p.autoRestockEnabled !== false}
+                                            onChange={(e) => {
+                                              const updated = products.map(item => {
+                                                if (item.id === p.id) {
+                                                  return { ...item, autoRestockEnabled: e.target.checked };
+                                                }
+                                                return item;
+                                              });
+                                              setProducts(updated);
+                                              localStorage.setItem('cyberport_products', JSON.stringify(updated));
+                                              triggerToast(`Auto-Restock for ${p.name} set to ${e.target.checked ? 'ENABLED' : 'DISABLED'}`, "success");
+                                            }}
+                                            className="w-3 h-3 rounded border-slate-800 bg-slate-900 text-emerald-400 focus:ring-0 cursor-pointer accent-emerald-500"
+                                          />
+                                          <span>Auto-Restock</span>
+                                        </label>
+
                                         {(p.stock || 0) < 5 && (
                                           <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase bg-rose-500/30 border border-rose-500/50 text-rose-200 animate-pulse tracking-wide flex items-center gap-1 shrink-0">
                                             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block shrink-0" />
@@ -10243,12 +10524,12 @@ export default function App() {
                   <span className="uppercase tracking-widest">Cognitive Matrix</span>
                   <button 
                     onClick={() => {
-                      const nextTheme = theme === 'day' ? 'night' : theme === 'night' ? 'cyberpunk' : 'day';
+                      const nextTheme = theme === 'day' ? 'night' : theme === 'night' ? 'cyberpunk' : theme === 'cyberpunk' ? 'cyberpunk-light' : 'day';
                       setTheme(nextTheme);
                       triggerToast(`Matrix environment reconfigured to: ${nextTheme.toUpperCase()}`, "success");
                     }} 
                     className="p-1 hover:text-white transition-colors cursor-pointer flex items-center gap-1" 
-                    title="Cycle System Matrix Theme (Day/Night/Cyberpunk)"
+                    title="Cycle System Matrix Theme (Day/Night/Cyberpunk/Cyberpunk-Light)"
                   >
                     <Sun className="w-3.5 h-3.5" />
                     <span className="text-[9px] uppercase font-bold text-teal-400 font-mono">({theme})</span>
@@ -10491,29 +10772,32 @@ export default function App() {
                   </div>
 
                   {/* Gemini Voice Selector Dropdown */}
-                  {availableVoices.length > 0 && (
-                    <div className="mb-6 p-3 bg-slate-900/60 border border-teal-950 rounded-xl">
-                      <label className="block text-[8px] uppercase tracking-widest text-teal-400 font-mono mb-1.5 font-bold">
-                        🔊 SELECT COGNITIVE VOICE VOICE:
-                      </label>
-                      <select
-                        value={selectedVoiceName}
-                        onChange={(e) => {
-                          setSelectedVoiceName(e.target.value);
-                          localStorage.setItem('cyberport_selected_voice', e.target.value);
-                          triggerToast(`Gemini voice updated!`, "success");
-                        }}
-                        className="w-full text-[10px] font-mono bg-slate-950 border border-teal-500/30 text-teal-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-teal-400 cursor-pointer"
-                      >
-                        <option value="">Default System Voice</option>
-                        {availableVoices.map((voice) => (
-                          <option key={voice.name} value={voice.name}>
-                            {voice.name} ({voice.lang})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  <div className="mb-6 p-3 bg-slate-900/60 border border-teal-950 rounded-xl">
+                    <label className="block text-[8px] uppercase tracking-widest text-teal-400 font-mono mb-1.5 font-bold">
+                      🔊 SELECT COGNITIVE VOICE:
+                    </label>
+                    <select
+                      value={selectedVoiceName}
+                      onChange={(e) => {
+                        setSelectedVoiceName(e.target.value);
+                        localStorage.setItem('cyberport_selected_voice', e.target.value);
+                        triggerToast(`Gemini voice updated!`, "success");
+                      }}
+                      className="w-full text-[10px] font-mono bg-slate-950 border border-teal-500/30 text-teal-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-teal-400 cursor-pointer"
+                    >
+                      <option value="">Default System Voice</option>
+                      {availableVoices.map((voice) => (
+                        <option key={voice.name} value={voice.name}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                    {availableVoices.length === 0 && (
+                      <span className="text-[8px] text-teal-500/50 mt-1 block font-mono">
+                        System is loading browser voices...
+                      </span>
+                    )}
+                  </div>
 
                   {/* Command Terminal Input */}
                   <form onSubmit={handleAiQuery} className="w-full relative">
@@ -11347,295 +11631,1008 @@ export default function App() {
         </button>
 
         {isAiOpen && (
-          <div className="fixed inset-0 bg-[#131314] text-[#e3e3e3] z-50 flex font-sans select-none animate-fade-in">
-            {/* Left Side Bar */}
-            <div className="w-[68px] border-r border-[#2e2f30]/40 flex flex-col justify-between py-5 items-center bg-[#131314] shrink-0">
-              {/* Top Icons */}
-              <div className="flex flex-col items-center gap-6">
-                {/* Gemini Colorful Logo / Star - Clicking closes overlay to return to app */}
-                <button 
-                  onClick={() => setIsAiOpen(false)}
-                  className="w-10 h-10 flex items-center justify-center hover:scale-110 transition-all cursor-pointer relative group"
-                  title="Return to Shandong Azum"
-                >
-                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#geminiSidebarStarGradient)" />
-                    <defs>
-                      <linearGradient id="geminiSidebarStarGradient" x1="3" y1="2" x2="21" y2="20">
-                        <stop offset="0%" stopColor="#4e82f7" />
-                        <stop offset="50%" stopColor="#9b51e0" />
-                        <stop offset="100%" stopColor="#e25c84" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                </button>
+          <div className={`fixed inset-0 z-50 flex font-sans select-none animate-fade-in ${
+            (theme === 'day' || theme === 'cyberpunk-light')
+              ? 'bg-slate-50 text-slate-900' 
+              : 'bg-[#131314] text-[#e3e3e3]'
+          }`}>
+            
+            {/* 1. UPGRADED SIDEBAR - COLLAPSIBLE WITH DYNAMIC VIEWS */}
+            <div className={`border-r flex flex-col justify-between py-5 transition-all duration-300 shrink-0 ${
+              isGeminiSidebarExpanded ? 'w-[260px] px-4' : 'w-[68px] items-center px-2'
+            } ${
+              (theme === 'day' || theme === 'cyberpunk-light')
+                ? 'bg-white border-slate-200' 
+                : 'bg-[#1b1b1c] border-[#2e2f30]/30'
+            }`}>
+              
+              {/* Top Section */}
+              <div className="flex flex-col gap-4 w-full">
+                {/* Expand / Collapse & Logo Header */}
+                <div className="flex items-center justify-between w-full px-2">
+                  <div className="flex items-center gap-2.5 overflow-hidden">
+                    <svg className="w-6 h-6 shrink-0" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#geminiSidebarStarGradient)" />
+                      <defs>
+                        <linearGradient id="geminiSidebarStarGradient" x1="3" y1="2" x2="21" y2="20">
+                          <stop offset="0%" stopColor="#4e82f7" />
+                          <stop offset="50%" stopColor="#9b51e0" />
+                          <stop offset="100%" stopColor="#e25c84" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    {isGeminiSidebarExpanded && (
+                      <span className="font-semibold text-sm tracking-tight bg-linear-to-r from-blue-400 to-pink-500 bg-clip-text text-transparent font-sans">
+                        Gemini Studio
+                      </span>
+                    )}
+                  </div>
+                  <button 
+                    onClick={() => setIsGeminiSidebarExpanded(!isGeminiSidebarExpanded)}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      (theme === 'day' || theme === 'cyberpunk-light') ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-[#28292a] text-slate-400'
+                    }`}
+                    title="Toggle Sidebar"
+                  >
+                    <Menu className="w-4 h-4" />
+                  </button>
+                </div>
 
                 {/* New Chat Button */}
                 <button 
                   onClick={() => {
-                    setAiMessages([]);
+                    setAiMessages([
+                      { sender: 'ai', text: `Welcome back to Gemini, Mr. ${currentUser?.name || 'Operator'}. Conversational logs re-initialized. Choose a model above or select media tools below to start!`, date: new Date().toLocaleTimeString() }
+                    ]);
+                    setGeminiActiveView('chat');
                     triggerToast("New conversation initialized", "success");
                   }}
-                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  className={`flex items-center gap-3 py-3 rounded-full transition-all text-xs font-medium cursor-pointer ${
+                    isGeminiSidebarExpanded ? 'px-4 w-full' : 'w-10 h-10 justify-center'
+                  } ${
+                    (theme === 'day' || theme === 'cyberpunk-light')
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-800' 
+                      : 'bg-[#28292a] hover:bg-[#333537] text-white'
+                  }`}
                   title="New Chat"
                 >
-                  <Plus className="w-5 h-5" />
+                  <Plus className="w-4 h-4 text-blue-500 shrink-0" />
+                  {isGeminiSidebarExpanded && <span>New Chat</span>}
                 </button>
 
-                {/* Search */}
-                <button 
-                  onClick={() => triggerToast("Query history active in sidebar", "success")}
-                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer" 
-                  title="Search"
-                >
-                  <Search className="w-5 h-5" />
-                </button>
+                {/* Navigation Menu Links */}
+                <div className="flex flex-col gap-1 mt-2">
+                  {[
+                    { id: 'chat', label: 'Advanced Chat', icon: Bot, badge: 'V3.5' },
+                    { id: 'images', label: 'Create Images', icon: Image, badge: 'Gen-3' },
+                    { id: 'music', label: 'Create Music', icon: Music, badge: 'Lyria' },
+                    { id: 'video', label: 'Create Video', icon: Video, badge: 'Veo' },
+                    { id: 'notebooks', label: 'My Notebooks', icon: BookOpen },
+                    { id: 'library', label: 'Library & Logs', icon: FolderHeart },
+                    { id: 'firebase', label: 'Firebase Core', icon: Database, badge: 'Rules' },
+                  ].map((item) => {
+                    const IconComponent = item.icon;
+                    const isActive = geminiActiveView === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setGeminiActiveView(item.id as any);
+                          triggerToast(`Switched view to ${item.label}`, "success");
+                        }}
+                        className={`flex items-center justify-between py-2.5 rounded-xl transition-all text-xs cursor-pointer ${
+                          isGeminiSidebarExpanded ? 'px-3 w-full' : 'w-10 h-10 justify-center'
+                        } ${
+                          isActive 
+                            ? ((theme === 'day' || theme === 'cyberpunk-light') ? 'bg-blue-50 text-blue-600 font-semibold' : 'bg-[#2d2f31] text-white font-semibold')
+                            : ((theme === 'day' || theme === 'cyberpunk-light') ? 'hover:bg-slate-100 text-slate-600' : 'hover:bg-[#1e1f20] text-slate-400 hover:text-slate-200')
+                        }`}
+                        title={item.label}
+                      >
+                        <div className="flex items-center gap-3">
+                          <IconComponent className={`w-4 h-4 shrink-0 ${isActive ? 'text-blue-500' : 'text-slate-500'}`} />
+                          {isGeminiSidebarExpanded && <span>{item.label}</span>}
+                        </div>
+                        {isGeminiSidebarExpanded && item.badge && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 scale-90 origin-right">
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
 
-                {/* Clock/History */}
-                <button 
-                  onClick={() => {
-                    setAiMessages([]);
-                    triggerToast("Chat stream cleared", "success");
-                  }}
-                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-[#ff3b30] transition-colors cursor-pointer" 
-                  title="Clear Chat History"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-
-                {/* Apps Grid */}
-                <button 
-                  onClick={() => triggerToast("Direct Gemini connection active", "success")}
-                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer" 
-                  title="Dynamic Integrations"
-                >
-                  <Layers className="w-5 h-5" />
-                </button>
+                {/* Recents Search & List (When Sidebar Expanded) */}
+                {isGeminiSidebarExpanded && (
+                  <div className="mt-4 border-t border-slate-700/15 pt-4">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold px-2 font-mono">Recents</span>
+                    <div className="relative mt-2 px-1">
+                      <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+                      <input 
+                        type="text" 
+                        placeholder="Search history..." 
+                        value={searchHistoryQuery}
+                        onChange={(e) => setSearchHistoryQuery(e.target.value)}
+                        className={`w-full text-xs pl-8 pr-2 py-1.5 rounded-lg border focus:outline-none ${
+                          (theme === 'day' || theme === 'cyberpunk-light')
+                            ? 'bg-slate-100 border-slate-200 text-slate-800'
+                            : 'bg-[#1e1f20] border-[#2e2f30]/30 text-white'
+                        }`}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-0.5 mt-2 max-h-[140px] overflow-y-auto scrollbar-thin">
+                      {geminiHistory
+                        .filter(h => h.toLowerCase().includes(searchHistoryQuery.toLowerCase()))
+                        .map((hist, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setAiInput(hist);
+                              setGeminiActiveView('chat');
+                              triggerToast(`Loaded history: "${hist}"`, "success");
+                            }}
+                            className={`text-left text-[11px] py-2 px-3 rounded-lg overflow-hidden text-ellipsis whitespace-nowrap transition-colors cursor-pointer ${
+                              (theme === 'day' || theme === 'cyberpunk-light') ? 'hover:bg-slate-100 text-slate-600' : 'hover:bg-[#202123] text-slate-400'
+                            }`}
+                            title={hist}
+                          >
+                            {hist}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Bottom Icons */}
-              <div className="flex flex-col items-center gap-5">
-                {/* Settings (Gear) */}
-                <button 
-                  onClick={() => triggerToast("Settings: Enterprise connection secure", "success")}
-                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer" 
-                  title="System Status"
-                >
-                  <Settings className="w-5 h-5" />
-                </button>
+              {/* Bottom Section - Settings gear, User info & voice quick trigger */}
+              <div className="flex flex-col gap-2 w-full">
+                {isGeminiSidebarExpanded && (
+                  <div className={`p-3 rounded-xl mb-2 flex items-center justify-between border ${
+                    (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-slate-50 border-slate-200' : 'bg-[#1e1f20] border-[#2e2f30]/20'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <Mic className="w-3.5 h-3.5 text-pink-500 animate-pulse" />
+                      <span className="text-[10px] font-medium text-slate-400">TTS Active ({selectedVoiceName || 'Default'})</span>
+                    </div>
+                    <input 
+                      type="checkbox"
+                      checked={isAiVoiceEnabled}
+                      onChange={() => {
+                        setIsAiVoiceEnabled(!isAiVoiceEnabled);
+                        triggerToast(isAiVoiceEnabled ? "Voice output disabled" : "Voice output enabled", "success");
+                      }}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                    />
+                  </div>
+                )}
 
-                {/* User Profile picture */}
-                <div className="w-8 h-8 rounded-full overflow-hidden border border-[#2e2f30] hover:scale-105 transition-transform" title={currentUser?.email || "Operator"}>
-                  <img 
-                    src={profileImage} 
-                    alt="Profile" 
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
+                <div className="flex items-center justify-between w-full px-2">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <img 
+                      src={profileImage} 
+                      alt="Avatar" 
+                      className="w-7 h-7 rounded-full object-cover border border-[#2e2f30]/40 shrink-0"
+                      referrerPolicy="no-referrer"
+                    />
+                    {isGeminiSidebarExpanded && (
+                      <span className="text-xs font-medium text-slate-400 truncate max-w-[120px]" title={currentUser?.email || "Operator"}>
+                        {currentUser?.name || currentUser?.email?.split('@')[0] || "Operator"}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Gears Setting Menu Trigger */}
+                  <div className="relative">
+                    <button 
+                      onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        (theme === 'day' || theme === 'cyberpunk-light') ? 'hover:bg-slate-100 text-slate-600' : 'hover:bg-[#28292a] text-slate-300'
+                      }`}
+                      title="Settings Menu"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Dynamic Gears settings drop down */}
+                    {isUserMenuOpen && (
+                      <div className={`absolute bottom-8 right-0 w-56 rounded-2xl p-2.5 shadow-2xl border z-50 animate-fade-in ${
+                        (theme === 'day' || theme === 'cyberpunk-light')
+                          ? 'bg-white border-slate-200 text-slate-800'
+                          : 'bg-[#1e1f20] border-[#2e2f30] text-slate-200'
+                      }`}>
+                        <div className="border-b border-slate-700/10 pb-1.5 mb-1.5">
+                          <span className="text-[10px] uppercase font-bold text-slate-500 font-mono">Theme Presets</span>
+                          <div className="grid grid-cols-2 gap-1 mt-1">
+                            {[
+                              { key: 'day', label: 'Day' },
+                              { key: 'night', label: 'Night' },
+                              { key: 'cyberpunk', label: 'Cyberpunk' },
+                              { key: 'cyberpunk-light', label: 'Cyber Light' }
+                            ].map((preset) => (
+                              <button
+                                key={preset.key}
+                                onClick={() => {
+                                  setTheme(preset.key as any);
+                                  triggerToast(`Applied ${preset.label} theme`, "success");
+                                }}
+                                className={`text-[10px] py-1 rounded text-center cursor-pointer ${
+                                  theme === preset.key 
+                                    ? 'bg-blue-500 text-white font-bold' 
+                                    : 'bg-slate-800/10 hover:bg-slate-800/20 text-slate-400'
+                                }`}
+                              >
+                                {preset.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <button 
+                            onClick={() => {
+                              setIsUserMenuOpen(false);
+                              triggerToast("Enterprise plan status verified: Active", "success");
+                            }}
+                            className="w-full text-left text-xs py-1.5 px-2 hover:bg-slate-800/10 rounded-lg flex items-center justify-between"
+                          >
+                            <span>License Plan</span>
+                            <span className="text-[9px] bg-green-500/10 text-green-400 px-1 py-0.5 rounded">PRO</span>
+                          </button>
+                          
+                          {/* Voice Synthesizer selector inside menu */}
+                          <div className="pt-1.5 border-t border-slate-700/10 mt-1.5">
+                            <span className="text-[10px] uppercase font-bold text-slate-500 font-mono">Synthesizer Voice</span>
+                            <select
+                              value={selectedVoiceName}
+                              onChange={(e) => {
+                                setSelectedVoiceName(e.target.value);
+                                triggerToast(`Active TTS Voice: ${e.target.value.split(' ')[0]}`, "success");
+                              }}
+                              className={`w-full mt-1 text-[11px] py-1 px-1.5 rounded border focus:outline-none focus:ring-0 ${
+                                (theme === 'day' || theme === 'cyberpunk-light')
+                                  ? 'bg-slate-100 border-slate-200 text-slate-800'
+                                  : 'bg-[#131314] border-slate-700 text-white'
+                              }`}
+                            >
+                              {availableVoices.length > 0 ? (
+                                availableVoices.map((v, i) => (
+                                  <option key={i} value={v.name}>{v.name.slice(0, 22)}</option>
+                                ))
+                              ) : (
+                                <>
+                                  <option value="Kore">Kore (Zephyr Engine)</option>
+                                  <option value="Puck">Puck (Fast Speech)</option>
+                                  <option value="Fenrir">Fenrir (Deep Bass)</option>
+                                </>
+                              )}
+                            </select>
+                          </div>
+
+                          <button 
+                            onClick={() => {
+                              setIsUserMenuOpen(false);
+                              setAiMessages([]);
+                              triggerToast("All persistent conversations purged", "success");
+                            }}
+                            className="w-full text-left text-xs py-1.5 px-2 text-red-400 hover:bg-red-500/10 rounded-lg flex items-center justify-between"
+                          >
+                            <span>Clear Cache</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col justify-between relative bg-[#131314] h-full overflow-hidden">
-              {/* Top Bar */}
-              <div className="h-16 flex items-center justify-between px-6 z-10 shrink-0 border-b border-[#2e2f30]/20">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400 font-mono tracking-wider">GEMINI ENTERPRISE</span>
+            {/* 2. MAIN WORKING CANVAS */}
+            <div className={`flex-1 flex flex-col justify-between relative h-full overflow-hidden ${
+              (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-[#f0f4f9]' : 'bg-[#131314]'
+            }`}>
+              
+              {/* Header Top Bar */}
+              <div className={`h-16 flex items-center justify-between px-6 shrink-0 border-b z-10 ${
+                (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-white border-slate-200' : 'bg-[#131314] border-[#2e2f30]/20'
+              }`}>
+                
+                {/* 3. MODEL SELECTOR DROPDOWN (17 MODERN FEATURES REQUIREMENT) */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                      (theme === 'day' || theme === 'cyberpunk-light')
+                        ? 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
+                        : 'bg-[#1e1f20] hover:bg-[#28292a] border-[#2e2f30]/40 text-slate-200'
+                    }`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <span>
+                      {geminiModel === 'gemini-3.5-flash' && 'Gemini 3.5 Flash (Default)'}
+                      {geminiModel === 'gemini-3.1-flash-lite' && 'Gemini 3.1 Flash-Lite (Fast)'}
+                      {geminiModel === 'gemini-3.1-pro-preview' && 'Gemini 3.1 Pro (Advanced)'}
+                      {geminiModel === 'extended-thinking' && 'Extended Thinking (High)'}
+                      {geminiModel === 'live' && 'Live Audio Stream'}
+                    </span>
+                    <ChevronRight className="w-3 h-3 rotate-90 text-slate-400" />
+                  </button>
+
+                  {/* Model menu drawer options */}
+                  {isModelMenuOpen && (
+                    <div className={`absolute left-0 mt-2 w-[280px] rounded-2xl p-2.5 shadow-2xl border z-50 animate-fade-in ${
+                      (theme === 'day' || theme === 'cyberpunk-light')
+                        ? 'bg-white border-slate-200 text-slate-800'
+                        : 'bg-[#1e1f20] border-[#2e2f30] text-slate-100'
+                    }`}>
+                      {[
+                        { key: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', desc: 'Fastest answers, lightweight parameters' },
+                        { key: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', desc: 'All-around assistant, standard prompt processing' },
+                        { key: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', desc: 'Deep reasoning, advanced coding & math' },
+                        { key: 'extended-thinking', label: 'Extended Thinking', desc: 'Full high-thinking level optimization' },
+                        { key: 'live', label: 'Live Voice Stream', desc: 'Realtime bidirectional conversational audio' },
+                      ].map((m) => (
+                        <button
+                          key={m.key}
+                          onClick={() => {
+                            setGeminiModel(m.key as any);
+                            setIsModelMenuOpen(false);
+                            triggerToast(`Switched active model to ${m.label}`, "success");
+                          }}
+                          className={`w-full text-left p-2 rounded-xl text-xs flex flex-col gap-0.5 mb-1 cursor-pointer transition-colors ${
+                            geminiModel === m.key 
+                              ? 'bg-blue-500/10 border border-blue-500/30 text-white' 
+                              : 'hover:bg-slate-800/15 border border-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <span className="font-semibold text-blue-400">{m.label}</span>
+                            {geminiModel === m.key && <Check className="w-3.5 h-3.5 text-blue-400" />}
+                          </div>
+                          <span className="text-[10px] text-slate-400">{m.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
+                {/* Right side close buttons */}
                 <div className="flex items-center gap-3">
-                  {/* Upgrade Button matching screenshot */}
                   <button 
-                    onClick={() => triggerToast("Pricing Plans: You are on the Gemini Pro Enterprise plan", "success")}
-                    className="bg-[#004b7c]/40 border border-[#004b7c]/60 text-sky-300 font-medium px-4 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#004b7c]/60 transition-all text-xs cursor-pointer shadow-sm shadow-[#004b7c]/20"
+                    onClick={() => triggerToast("All active telemetry streams synchronized", "success")}
+                    className={`bg-blue-500/10 border border-blue-500/20 text-blue-400 font-medium px-3.5 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-blue-500/20 transition-all text-xs cursor-pointer`}
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
-                    <span>Upgrade</span>
+                    <Database className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                    <span>Real-time Active</span>
                   </button>
 
-                  {/* New Chat pen icon */}
-                  <button 
-                    onClick={() => {
-                      setAiMessages([]);
-                      triggerToast("New conversation initialized", "success");
-                    }}
-                    className="w-9 h-9 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
-                    title="New Chat"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-
-                  {/* Close / Return to App Button */}
                   <button 
                     onClick={() => setIsAiOpen(false)}
-                    className="w-9 h-9 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer border border-[#2e2f30]"
-                    title="Return to Shandong Azum"
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer border ${
+                      (theme === 'day' || theme === 'cyberpunk-light')
+                        ? 'hover:bg-slate-100 border-slate-200 text-slate-600'
+                        : 'hover:bg-[#1e1f20] border-[#2e2f30] text-slate-400'
+                    }`}
+                    title="Return to Shop Dashboard"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Main Interactive Space */}
-              <div className="flex-1 flex flex-col justify-center overflow-y-auto px-4 md:px-20 py-6 relative">
-                {!aiMessages.some(m => m.sender === 'user') ? (
-                  /* HOMEPAGE / FIRST STATE - MATCHING IMAGE 1 */
-                  <div className="max-w-2xl w-full mx-auto flex flex-col items-center justify-center text-center space-y-10 animate-fade-in my-auto select-none">
-                    {/* Animated Large Greeting matching image 1 */}
-                    <h1 className="text-4xl sm:text-5xl font-semibold text-[#e3e3e3] tracking-tight bg-gradient-to-r from-[#e3e3e3] via-[#e3e3e3] to-[#808080] bg-clip-text text-transparent">
-                      What's the vibe, {currentUser?.name || 'mohab'}?
-                    </h1>
+              {/* 4. DYNAMIC VIEW RENDER CHANNELS */}
+              <div className="flex-1 overflow-y-auto px-4 md:px-20 py-6 relative">
+                
+                {/* VIEW A: CHAT INTERFACE */}
+                {geminiActiveView === 'chat' && (
+                  <>
+                    {!aiMessages.some(m => m.sender === 'user') ? (
+                      /* Landing State - Beautiful design with grid selectors */
+                      <div className="max-w-2xl w-full mx-auto flex flex-col justify-center items-center h-full min-h-[400px] text-center space-y-10 animate-fade-in my-auto">
+                        <h1 className={`text-4xl sm:text-5xl font-semibold tracking-tight ${
+                          (theme === 'day' || theme === 'cyberpunk-light')
+                            ? 'text-slate-800'
+                            : 'text-[#e3e3e3] bg-linear-to-r from-[#e3e3e3] via-[#cbd5e1] to-[#64748b] bg-clip-text text-transparent'
+                        }`}>
+                          What's the vibe, {currentUser?.name || 'mohab'}?
+                        </h1>
 
-                    {/* Input pill search container */}
-                    <form onSubmit={handleAiQuery} className="w-full">
-                      <div className="relative w-full max-w-2xl bg-[#1e1f20] hover:bg-[#2e2f30] focus-within:bg-[#2e2f30] rounded-full p-1 border border-transparent focus-within:border-slate-700/50 shadow-lg flex items-center px-4 transition-all duration-300">
-                        {/* Plus Icon left */}
+                        {/* Interactive Suggestion Cards Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full max-w-xl">
+                          {[
+                            { title: 'Create cyberpunk futuristic neon car', text: 'Animate futuristic concept sport car', icon: Image, view: 'images' },
+                            { title: 'Compose short melodic synthwave sound track', text: '30s retro ambient gaming loop', icon: Music, view: 'music' },
+                            { title: 'Produce hyperrealistic laser video loop', text: 'A futuristic laser storm animation', icon: Video, view: 'video' },
+                            { title: 'Perform search query on current stock levels', text: 'Is Shandong Azum online?', icon: Search, view: 'chat', customPrompt: 'Find live stock updates for SD Azum' }
+                          ].map((suggest, i) => {
+                            const SugIcon = suggest.icon;
+                            return (
+                              <button
+                                key={i}
+                                onClick={() => {
+                                  if (suggest.customPrompt) {
+                                    setAiInput(suggest.customPrompt);
+                                  } else {
+                                    setGeminiActiveView(suggest.view as any);
+                                  }
+                                  triggerToast(`Loaded suggested preset`, "success");
+                                }}
+                                className={`p-4 rounded-2xl text-left border transition-all hover:scale-102 cursor-pointer flex flex-col justify-between h-[110px] ${
+                                  (theme === 'day' || theme === 'cyberpunk-light')
+                                    ? 'bg-white border-slate-200 hover:shadow-md hover:border-blue-400 text-slate-800'
+                                    : 'bg-[#1e1f20]/60 border-[#2e2f30]/40 hover:bg-[#282a2d] hover:border-slate-700/60 text-slate-200'
+                                }`}
+                              >
+                                <span className="text-[12px] font-medium leading-relaxed">{suggest.title}</span>
+                                <div className="flex items-center justify-between w-full text-slate-500">
+                                  <span className="text-[10px]">{suggest.text}</span>
+                                  <SugIcon className="w-4 h-4 text-blue-400" />
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Active Multi-turn Conversation Feed */
+                      <div className="max-w-3xl w-full mx-auto flex-1 flex flex-col h-full justify-between">
+                        <div className="flex-1 space-y-8 pr-2 pb-24">
+                          {aiMessages.map((msg, idx) => {
+                            const isUser = msg.sender === 'user';
+                            return (
+                              <div 
+                                key={idx} 
+                                className={`flex flex-col w-full animate-fade-in ${
+                                  isUser ? 'items-end' : 'items-start'
+                                }`}
+                              >
+                                {isUser ? (
+                                  <div className={`rounded-3xl px-6 py-3 max-w-[75%] text-left shadow-sm text-sm ${
+                                    (theme === 'day' || theme === 'cyberpunk-light')
+                                      ? 'bg-slate-200 text-slate-800'
+                                      : 'bg-[#1e1f20] text-slate-100'
+                                  }`}>
+                                    {msg.text}
+                                  </div>
+                                ) : (
+                                  <div className="w-full flex gap-4 text-left">
+                                    <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 bg-transparent mt-0.5">
+                                      <svg className="w-6 h-6 animate-pulse" viewBox="0 0 24 24" fill="none">
+                                        <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#miniSpark)" />
+                                        <defs>
+                                          <linearGradient id="miniSpark" x1="3" y1="2" x2="21" y2="20">
+                                            <stop offset="0%" stopColor="#4285f4" />
+                                            <stop offset="50%" stopColor="#9b72cb" />
+                                            <stop offset="100%" stopColor="#d96570" />
+                                          </linearGradient>
+                                        </defs>
+                                      </svg>
+                                    </div>
+
+                                    <div className="flex-1 space-y-4">
+                                      {/* Plain answer text */}
+                                      <div className={`text-sm leading-relaxed whitespace-pre-wrap select-text font-sans ${
+                                        (theme === 'day' || theme === 'cyberpunk-light') ? 'text-slate-800' : 'text-slate-200'
+                                      }`}>
+                                        {msg.text}
+                                      </div>
+
+                                      {/* RENDER MEDIA OUTPUT IF RETURNED BY DYNAMIC MODEL INTEGRATION */}
+                                      {msg.mediaType === 'image' && msg.mediaUrl && (
+                                        <div className="mt-3 max-w-md rounded-2xl overflow-hidden border border-[#2e2f30]/40 relative group shadow-2xl">
+                                          <img 
+                                            src={msg.mediaUrl} 
+                                            alt="Generated graphic" 
+                                            className="w-full h-auto object-cover"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                            <a 
+                                              href={msg.mediaUrl} 
+                                              download={`gemini-generated-${idx}.png`}
+                                              className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-full transition-all cursor-pointer text-xs flex items-center gap-1.5 font-bold"
+                                            >
+                                              <Download className="w-4 h-4" />
+                                              <span>Save Image</span>
+                                            </a>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {msg.mediaType === 'music' && (
+                                        <div className={`mt-3 max-w-md p-4 rounded-2xl border ${
+                                          (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-white border-slate-200' : 'bg-slate-900/90 border-[#2e2f30]/40'
+                                        }`}>
+                                          <div className="flex items-center gap-3">
+                                            <button className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white hover:scale-105 transition-transform">
+                                              <Play className="w-4 h-4 ml-0.5" />
+                                            </button>
+                                            <div className="flex-1">
+                                              <span className="text-xs font-semibold text-blue-400 block font-mono">Lyria Studio Clip</span>
+                                              <span className="text-[10px] text-slate-500">Retro digital soundscape loop active</span>
+                                            </div>
+                                          </div>
+                                          
+                                          {/* CSS equalizer bars for playback state */}
+                                          <div className="flex items-end gap-1.5 h-6 mt-3.5 px-1">
+                                            {[18, 12, 22, 10, 24, 16, 20, 8, 18, 14, 22, 12, 18].map((val, idx) => (
+                                              <div 
+                                                key={idx} 
+                                                className="flex-1 bg-linear-to-t from-blue-500 to-pink-500 rounded-sm" 
+                                                style={{ height: `${val}px` }} 
+                                              />
+                                            ))}
+                                          </div>
+                                          
+                                          {msg.musicLyrics && (
+                                            <div className="mt-3.5 pt-3.5 border-t border-slate-700/20">
+                                              <span className="text-[10px] text-slate-400 uppercase font-bold font-mono">Synchronized Lyrics</span>
+                                              <pre className="text-[10px] text-slate-500 mt-1 font-mono leading-relaxed whitespace-pre-wrap">{msg.musicLyrics}</pre>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+
+                                      {msg.mediaType === 'video' && msg.mediaUrl && (
+                                        <div className="mt-3 max-w-lg rounded-2xl overflow-hidden border border-[#2e2f30]/40 relative shadow-2xl">
+                                          <video 
+                                            src={msg.mediaUrl} 
+                                            controls 
+                                            autoPlay 
+                                            loop 
+                                            muted 
+                                            className="w-full h-auto"
+                                          />
+                                          <div className="absolute top-3 right-3 bg-black/60 px-2 py-1 rounded text-[9px] text-sky-300 font-mono">
+                                            Veo-3.1 Render
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* VIEW B: CREATE IMAGES DASHBOARD */}
+                {geminiActiveView === 'images' && (
+                  <div className="max-w-3xl w-full mx-auto space-y-8 animate-fade-in">
+                    <div className="text-center max-w-xl mx-auto space-y-3">
+                      <h2 className="text-2xl font-bold tracking-tight">Gemini Image Studio</h2>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Generate breathtaking photorealistic illustrations or futuristic conceptual UI visuals using our state-of-the-art **gemini-3-pro-image** model.
+                      </p>
+                    </div>
+
+                    <div className={`p-6 rounded-3xl border space-y-6 ${
+                      (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-white border-slate-200' : 'bg-[#1e1f20]/60 border-[#2e2f30]/30'
+                    }`}>
+                      {/* Aspect Ratio selector */}
+                      <div>
+                        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-bold block font-mono mb-2">Aspect Ratio</span>
+                        <div className="flex flex-wrap gap-2">
+                          {['1:1', '16:9', '9:16', '3:2', '2:3', '4:3', '21:9'].map((aspect) => (
+                            <button
+                              key={aspect}
+                              onClick={() => {
+                                setSelectedAspect(aspect);
+                                triggerToast(`Aspect Ratio: ${aspect}`, "success");
+                              }}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer border ${
+                                selectedAspect === aspect 
+                                  ? 'bg-blue-600 text-white border-transparent' 
+                                  : ((theme === 'day' || theme === 'cyberpunk-light') ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-slate-900/60 hover:bg-slate-800/80 text-slate-400')
+                              }`}
+                            >
+                              {aspect}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Resolution parameters */}
+                      <div>
+                        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-bold block font-mono mb-2">Quality Preset</span>
+                        <div className="flex gap-3">
+                          {['1K', '2K', '4K'].map((res) => (
+                            <button
+                              key={res}
+                              onClick={() => {
+                                setSelectedQuality(res);
+                                triggerToast(`Selected Quality: ${res}`, "success");
+                              }}
+                              className={`px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer border ${
+                                selectedQuality === res 
+                                  ? 'bg-blue-600 text-white border-transparent' 
+                                  : ((theme === 'day' || theme === 'cyberpunk-light') ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-slate-900/60 hover:bg-slate-800/80 text-slate-400')
+                              }`}
+                            >
+                              {res} HD
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Creative style guides */}
+                      <div>
+                        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-bold block font-mono mb-2">Art Styles</span>
+                        <div className="flex flex-wrap gap-2">
+                          {['Photorealistic', 'Cyberpunk Neon', 'Isometric Vector', '3D Claymation', 'Vintage Cinematic', 'Anime Outline'].map((style) => (
+                            <button
+                              key={style}
+                              onClick={() => {
+                                setAiInput(`A detailed ${style} representation of `);
+                                triggerToast(`Loaded "${style}" style preset`, "success");
+                              }}
+                              className={`px-3 py-1 rounded-full text-[10px] cursor-pointer ${
+                                (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-slate-100 hover:bg-slate-200 text-slate-600' : 'bg-slate-800/40 hover:bg-slate-800/80 text-slate-300'
+                              }`}
+                            >
+                              + {style}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* VIEW C: CREATE MUSIC DASHBOARD */}
+                {geminiActiveView === 'music' && (
+                  <div className="max-w-3xl w-full mx-auto space-y-8 animate-fade-in">
+                    <div className="text-center max-w-xl mx-auto space-y-3">
+                      <h2 className="text-2xl font-bold tracking-tight">Gemini Audio (Lyria Studio)</h2>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Generate studio-grade audio, soundtracks, or loop recordings using the latest **lyria-3-pro-preview** engine.
+                      </p>
+                    </div>
+
+                    <div className={`p-6 rounded-3xl border space-y-6 ${
+                      (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-white border-slate-200' : 'bg-[#1e1f20]/60 border-[#2e2f30]/30'
+                    }`}>
+                      <div>
+                        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-bold block font-mono mb-2">Track Duration Mode</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            onClick={() => {
+                              setMusicType('clip');
+                              triggerToast("Set to 30-Second Clip Mode", "success");
+                            }}
+                            className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
+                              musicType === 'clip' 
+                                ? 'border-blue-500 bg-blue-500/10 text-white' 
+                                : ((theme === 'day' || theme === 'cyberpunk-light') ? 'bg-slate-100 hover:bg-slate-200 text-slate-800' : 'bg-slate-900/60 hover:bg-slate-800/80 text-slate-400')
+                            }`}
+                          >
+                            <span className="text-xs font-bold block">Lyria Clip Preview</span>
+                            <span className="text-[10px] text-slate-500">Short loops up to 30s. Perfect for soundscapes.</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setMusicType('pro');
+                              triggerToast("Set to Full-Length Track Mode (Requires Premium Key)", "success");
+                            }}
+                            className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
+                              musicType === 'pro' 
+                                ? 'border-blue-500 bg-blue-500/10 text-white' 
+                                : ((theme === 'day' || theme === 'cyberpunk-light') ? 'bg-slate-100 hover:bg-slate-200 text-slate-800' : 'bg-slate-900/60 hover:bg-slate-800/80 text-slate-400')
+                            }`}
+                          >
+                            <span className="text-xs font-bold block">Lyria Pro Track</span>
+                            <span className="text-[10px] text-slate-500">Full-length premium audio tracks. High resolution.</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-bold block font-mono mb-2">BPM & Genre Guides</span>
+                        <div className="flex flex-wrap gap-2">
+                          {['120 BPM Synthwave', '95 BPM Lo-Fi Chill', '140 BPM Orchestral Epic', '70 BPM Ambient Space Drone'].map((genre) => (
+                            <button
+                              key={genre}
+                              onClick={() => {
+                                setAiInput(`A beautifully equalized ${genre} sound track featuring `);
+                                triggerToast(`Genre Preset: ${genre}`, "success");
+                              }}
+                              className={`px-3.5 py-1.5 rounded-xl text-xs cursor-pointer ${
+                                (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-slate-800/40 hover:bg-slate-800/80 text-slate-300'
+                              }`}
+                            >
+                              {genre}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* VIEW D: CREATE VIDEO */}
+                {geminiActiveView === 'video' && (
+                  <div className="max-w-3xl w-full mx-auto space-y-8 animate-fade-in">
+                    <div className="text-center max-w-xl mx-auto space-y-3">
+                      <h2 className="text-2xl font-bold tracking-tight">Gemini Video (Veo Studio)</h2>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        Generate premium 1080p high-fidelity cinema video loops from text prompts using **veo-3.1-lite-generate-preview**.
+                      </p>
+                    </div>
+
+                    <div className={`p-6 rounded-3xl border space-y-6 ${
+                      (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-white border-slate-200' : 'bg-[#1e1f20]/60 border-[#2e2f30]/30'
+                    }`}>
+                      <div>
+                        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-bold block font-mono mb-2">Camera Aspect Ratio</span>
+                        <div className="flex gap-3">
+                          {[
+                            { key: '16:9', label: '16:9 Landscape' },
+                            { key: '9:16', label: '9:16 Portrait (Shorts)' }
+                          ].map((asp) => (
+                            <button
+                              key={asp.key}
+                              onClick={() => {
+                                setVideoAspect(asp.key);
+                                triggerToast(`Video Aspect: ${asp.label}`, "success");
+                              }}
+                              className={`flex-1 py-3.5 rounded-2xl text-xs font-semibold cursor-pointer border text-center transition-colors ${
+                                videoAspect === asp.key 
+                                  ? 'bg-blue-600 text-white border-transparent' 
+                                  : ((theme === 'day' || theme === 'cyberpunk-light') ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-slate-900/60 hover:bg-slate-800/80 text-slate-400')
+                              }`}
+                            >
+                              {asp.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[11px] uppercase tracking-wider text-slate-500 font-bold block font-mono mb-2">Cinematic Prompts</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {[
+                            'Neon cybernetic streets in rain, 4k, cinematic lens flare',
+                            'Astronaut looking down at a neon grid cybercity on Mars',
+                            'Industrial machine assembling an intelligent robotic model',
+                            'Macro view of computer processor pulsing with light'
+                          ].map((vp) => (
+                            <button
+                              key={vp}
+                              onClick={() => {
+                                setAiInput(vp);
+                                triggerToast("Cinematic prompt loaded", "success");
+                              }}
+                              className={`text-left text-xs p-3 rounded-xl cursor-pointer ${
+                                (theme === 'day' || theme === 'cyberpunk-light') ? 'hover:bg-slate-100 text-slate-600 bg-slate-50' : 'hover:bg-[#202123] text-slate-300 bg-slate-900/40'
+                              }`}
+                            >
+                              {vp}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* VIEW E: NOTEBOOKS */}
+                {geminiActiveView === 'notebooks' && (
+                  <div className="max-w-2xl w-full mx-auto text-center space-y-6 py-12 animate-fade-in">
+                    <BookOpen className="w-16 h-16 text-blue-500 mx-auto animate-bounce" />
+                    <h2 className="text-2xl font-bold">Notebook Workspace</h2>
+                    <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+                      Notebooks allow you to attach large documents, manuals, or database schemas and ask Gemini to perform complex multi-source reasoning.
+                    </p>
+                    <button 
+                      onClick={() => triggerToast("New Notebook workspace initialized", "success")}
+                      className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2.5 rounded-full text-xs transition-all cursor-pointer shadow-lg"
+                    >
+                      + Create New Notebook
+                    </button>
+                  </div>
+                )}
+
+                {/* VIEW F: LIBRARY & HISTORIC LOGS */}
+                {geminiActiveView === 'library' && (
+                  <div className="max-w-2xl w-full mx-auto space-y-6 animate-fade-in">
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                      <FolderHeart className="w-5 h-5 text-pink-500 animate-pulse" />
+                      <span>Library & Conversations</span>
+                    </h2>
+                    <p className="text-xs text-slate-400">
+                      Manage all logged conversations, download active database presets, or clear conversation threads.
+                    </p>
+
+                    <div className="space-y-2.5">
+                      {geminiHistory.map((hist, idx) => (
+                        <div 
+                          key={idx}
+                          className={`p-4 rounded-2xl flex items-center justify-between border ${
+                            (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#1e1f20]/50 border-slate-800 text-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <History className="w-4 h-4 text-blue-500" />
+                            <span className="text-xs font-semibold">{hist}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button 
+                              onClick={() => {
+                                setAiInput(hist);
+                                setGeminiActiveView('chat');
+                                triggerToast("Restored chat text", "success");
+                              }}
+                              className="px-3 py-1.5 rounded-lg bg-blue-500/10 text-blue-400 text-[10px] hover:bg-blue-500/20"
+                            >
+                              Load
+                            </button>
+                            <button 
+                              onClick={() => {
+                                setGeminiHistory(geminiHistory.filter(h => h !== hist));
+                                triggerToast("Purged item", "success");
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-red-500/10 text-red-400"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* VIEW G: FIREBASE SYNCHRONIZER CORE */}
+                {geminiActiveView === 'firebase' && (
+                  <div className="max-w-2xl w-full mx-auto space-y-6 animate-fade-in">
+                    <div className="flex items-center gap-2 text-orange-500">
+                      <Database className="w-5 h-5 animate-pulse" />
+                      <h2 className="text-xl font-bold uppercase tracking-wider font-mono">Firebase Synced Real-time Engine</h2>
+                    </div>
+
+                    <div className={`p-5 rounded-2xl border space-y-4 ${
+                      (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900/60 border-slate-800 text-slate-200'
+                    }`}>
+                      <div className="flex justify-between items-center pb-3 border-b border-slate-700/20">
+                        <span className="text-xs font-bold font-mono">FIRESTORE CONNECTIVITY</span>
+                        <span className="text-[10px] bg-green-500/10 text-green-400 px-2 py-0.5 rounded font-mono font-bold">ONLINE</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3.5">
+                        <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-800/60">
+                          <span className="text-[10px] text-slate-400 font-mono block">USERS COUNT</span>
+                          <span className="text-lg font-bold text-slate-200 font-mono">{users.length} active</span>
+                        </div>
+                        <div className="p-3 bg-slate-950/40 rounded-xl border border-slate-800/60">
+                          <span className="text-[10px] text-slate-400 font-mono block">CATALOG PRODUCTS</span>
+                          <span className="text-lg font-bold text-slate-200 font-mono">{products.length} active</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 text-[11px] leading-relaxed text-slate-400 font-sans">
+                        Firebase firestore database synchronizer manages secure read/write protocols, keeps custom catalog products synced instantly across multiple deployment containers (including Vercel / Cloud Run), and validates user authentication tokens.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* 5. BOTTOM QUERY CONTROL RIG */}
+              <div className={`border-t p-4 shrink-0 z-10 sticky bottom-0 ${
+                (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-[#f0f4f9] border-slate-200/60' : 'bg-[#131314] border-[#2e2f30]/40'
+              }`}>
+                <div className="max-w-3xl w-full mx-auto">
+                  <form onSubmit={handleAiQuery} className="w-full">
+                    <div className={`relative w-full rounded-3xl p-1.5 border transition-all duration-300 shadow-2xl flex flex-col ${
+                      (theme === 'day' || theme === 'cyberpunk-light')
+                        ? 'bg-white border-slate-200 focus-within:border-blue-400'
+                        : 'bg-[#1e1f20] border-transparent focus-within:border-slate-700/60'
+                    }`}>
+                      
+                      {/* Textbox Input */}
+                      <div className="flex items-center px-3.5">
                         <button 
                           type="button" 
                           onClick={() => triggerToast("Context Attachment Protocol active", "success")}
-                          className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                          className="p-1.5 rounded-full hover:bg-slate-800/10 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                          title="Attach document or asset"
                         >
                           <Plus className="w-5 h-5" />
                         </button>
 
-                        {/* Input Textbox */}
                         <input
                           type="text"
-                          placeholder="Ask Gemini"
+                          placeholder={
+                            geminiActiveView === 'images' ? "Describe the image you want to generate" :
+                            geminiActiveView === 'music' ? "Describe the melody or audio you want to compose" :
+                            geminiActiveView === 'video' ? "Describe the video loop you want to animate" :
+                            "Ask Gemini anything..."
+                          }
                           value={aiInput}
                           onChange={(e) => setAiInput(e.target.value)}
-                          className="flex-1 bg-transparent border-none outline-none text-white text-sm py-3 px-3 placeholder-slate-400 focus:ring-0"
+                          className={`flex-1 bg-transparent border-none outline-none text-sm py-3 px-3 placeholder-slate-500 focus:ring-0 ${
+                            (theme === 'day' || theme === 'cyberpunk-light') ? 'text-slate-800' : 'text-white'
+                          }`}
                         />
 
-                        {/* Model Selector & Mic Button */}
+                        {/* Mic & Send indicators */}
                         <div className="flex items-center gap-2">
-                          <div className="relative group">
-                            <button 
-                              type="button"
-                              className="bg-[#282a2d] hover:bg-slate-800 text-slate-300 hover:text-white px-3 py-1 rounded-full text-xs font-medium font-sans flex items-center gap-1 border border-transparent transition-all cursor-pointer"
-                            >
-                              <span>Flash Extended</span>
-                              <ChevronRight className="w-3 h-3 rotate-90 text-slate-400" />
-                            </button>
-                          </div>
-
+                          {/* Live recording microphone simulation */}
                           <button 
                             type="button"
                             onClick={() => {
                               setIsAiVoiceEnabled(!isAiVoiceEnabled);
-                              triggerToast(isAiVoiceEnabled ? "Voice silenced" : "Voice active", "success");
+                              triggerToast(isAiVoiceEnabled ? "Text-to-speech silenced" : "Text-to-speech vocalized", "success");
                             }}
-                            className={`p-2 rounded-full hover:bg-slate-800 transition-colors cursor-pointer ${
+                            className={`p-2 rounded-full hover:bg-slate-800/10 transition-colors cursor-pointer ${
                               isAiVoiceEnabled ? 'text-pink-400 animate-pulse' : 'text-slate-400 hover:text-white'
                             }`}
+                            title="Toggle text-to-speech auto vocalization"
                           >
                             <Mic className="w-5 h-5" />
                           </button>
                         </div>
                       </div>
-                    </form>
-                  </div>
-                ) : (
-                  /* ACTIVE CHAT FEED - MATCHING IMAGE 2 */
-                  <div className="max-w-3xl w-full mx-auto flex-1 flex flex-col justify-between h-full">
-                    {/* Scrollable message container */}
-                    <div className="flex-1 overflow-y-auto space-y-8 pr-2 mb-4 scrollbar-thin scrollbar-thumb-slate-800/80" ref={globalLoungeChatFeedRef}>
-                      {aiMessages.map((msg, idx) => {
-                        const isUser = msg.sender === 'user';
-                        return (
-                          <div 
-                            key={idx} 
-                            className={`flex flex-col w-full animate-fade-in ${
-                              isUser ? 'items-end' : 'items-start'
+
+                      {/* 6. BOTTOM TOOLBAR: GROUNDING SELECTORS (17 MODERN FEATURES REQUIREMENT) */}
+                      <div className="flex items-center justify-between border-t border-slate-700/10 px-4 py-2 mt-1 bg-transparent">
+                        <div className="flex items-center gap-3.5">
+                          {/* Search Grounding toggle */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGoogleSearchGrounding(!googleSearchGrounding);
+                              triggerToast(googleSearchGrounding ? "Google Search grounding disabled" : "Google Search grounding active", "success");
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                              googleSearchGrounding 
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                                : 'bg-slate-800/20 border-transparent text-slate-400'
                             }`}
                           >
-                            {isUser ? (
-                              /* USER MESSAGE: Rounded Dark Pill on the Right */
-                              <div className="bg-[#1e1f20] text-slate-100 rounded-3xl px-6 py-3 max-w-[75%] text-left shadow-md text-sm font-sans">
-                                {msg.text}
-                              </div>
-                            ) : (
-                              /* GEMINI RESPONSE: Plain text on the Left with Mini Spark */
-                              <div className="w-full flex gap-3 text-left">
-                                {/* Colorful Mini Gemini Spark Icon on the Left */}
-                                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-transparent mt-0.5">
-                                  <svg className="w-5 h-5 animate-pulse" viewBox="0 0 24 24" fill="none">
-                                    <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#miniSpark)" />
-                                    <defs>
-                                      <linearGradient id="miniSpark" x1="3" y1="2" x2="21" y2="20">
-                                        <stop offset="0%" stopColor="#4285f4" />
-                                        <stop offset="50%" stopColor="#9b72cb" />
-                                        <stop offset="100%" stopColor="#d96570" />
-                                      </linearGradient>
-                                    </defs>
-                                  </svg>
-                                </div>
-
-                                {/* Plain White Answer text */}
-                                <div className="flex-1 text-slate-200 text-sm leading-relaxed font-sans whitespace-pre-wrap select-text selection:bg-slate-700">
-                                  {msg.text}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Bottom query bar stayed fixed at the bottom of active chat */}
-                    <div className="border-t border-[#2e2f30]/40 pt-4 bg-[#131314] sticky bottom-0">
-                      <form onSubmit={handleAiQuery} className="w-full">
-                        <div className="relative w-full max-w-3xl bg-[#1e1f20] hover:bg-[#2e2f30] focus-within:bg-[#2e2f30] rounded-full p-1 border border-transparent focus-within:border-slate-700/50 shadow-lg flex items-center px-4 transition-all duration-300">
-                          <button 
-                            type="button" 
-                            onClick={() => triggerToast("Context Attachment Protocol active", "success")}
-                            className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
-                          >
-                            <Plus className="w-5 h-5" />
+                            <span className={`w-1.5 h-1.5 rounded-full ${googleSearchGrounding ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                            <span>Grounding Search</span>
                           </button>
 
-                          <input
-                            type="text"
-                            placeholder="Ask Gemini"
-                            value={aiInput}
-                            onChange={(e) => setAiInput(e.target.value)}
-                            className="flex-1 bg-transparent border-none outline-none text-white text-sm py-2.5 px-3 placeholder-slate-400 focus:ring-0"
-                          />
-
-                          <div className="flex items-center gap-2">
-                            <button 
-                              type="button"
-                              className="bg-[#282a2d] hover:bg-slate-800 text-slate-300 hover:text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 cursor-pointer"
-                            >
-                              <span>Flash Extended</span>
-                              <ChevronRight className="w-3 h-3 rotate-90 text-slate-400" />
-                            </button>
-
-                            <button 
-                              type="button"
-                              onClick={() => {
-                                setIsAiVoiceEnabled(!isAiVoiceEnabled);
-                                triggerToast(isAiVoiceEnabled ? "Voice silenced" : "Voice active", "success");
-                              }}
-                              className={`p-2 rounded-full hover:bg-slate-800 transition-colors cursor-pointer ${
-                                isAiVoiceEnabled ? 'text-pink-400 animate-pulse' : 'text-slate-400 hover:text-white'
-                              }`}
-                            >
-                              <Mic className="w-5 h-5" />
-                            </button>
-                          </div>
+                          {/* Maps Grounding toggle */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGoogleMapsGrounding(!googleMapsGrounding);
+                              triggerToast(googleMapsGrounding ? "Google Maps grounding disabled" : "Google Maps grounding active", "success");
+                            }}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                              googleMapsGrounding 
+                                ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' 
+                                : 'bg-slate-800/20 border-transparent text-slate-400'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${googleMapsGrounding ? 'bg-sky-400 animate-pulse' : 'bg-slate-500'}`} />
+                            <span>Grounding Maps</span>
+                          </button>
                         </div>
-                      </form>
 
-                      {/* Disclaimer matching the footer text in image 2 */}
-                      <p className="text-[10px] text-center text-slate-500 mt-2 pb-1 font-sans">
-                        Gemini is AI and can make mistakes.
-                      </p>
+                        <div className="text-[10px] text-slate-500 font-sans select-none">
+                          Gemini 3.5 Flash Active
+                        </div>
+                      </div>
+
                     </div>
-                  </div>
-                )}
+                  </form>
+
+                  {/* Disclaimer matching image 2 */}
+                  <p className="text-[10px] text-center text-slate-500 mt-2 pb-1 font-sans select-none">
+                    Gemini is AI and can make mistakes.
+                  </p>
+                </div>
               </div>
+
             </div>
           </div>
         )}

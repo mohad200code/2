@@ -5,7 +5,7 @@ interface GooglePickerClientProps {
   googleToken: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
-  theme: 'day' | 'night' | 'cyberpunk';
+  theme: 'day' | 'night' | 'cyberpunk' | 'cyberpunk-light';
   triggerToast: (msg: string, type: 'success' | 'error' | 'info') => void;
 }
 

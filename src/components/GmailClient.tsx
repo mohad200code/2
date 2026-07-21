@@ -27,7 +27,7 @@ interface GmailClientProps {
   googleUser: { email: string; name: string; picture: string } | null;
   onConnect: () => void;
   onDisconnect: () => void;
-  theme: 'day' | 'night' | 'cyberpunk';
+  theme: 'day' | 'night' | 'cyberpunk' | 'cyberpunk-light';
   triggerToast: (message: string, type?: 'success' | 'error') => void;
   adminInbox: any[];
 }

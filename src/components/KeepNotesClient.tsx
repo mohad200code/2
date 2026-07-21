@@ -12,15 +12,15 @@ interface KeepNote {
 }
 
 interface KeepNotesClientProps {
-  googleToken: string | null;
-  theme: 'day' | 'night' | 'cyberpunk';
-  triggerToast: (msg: string, type?: 'success' | 'error') => void;
+  googleToken?: string | null;
+  theme?: 'day' | 'night' | 'cyberpunk' | 'cyberpunk-light';
+  triggerToast?: (msg: string, type?: 'success' | 'error') => void;
 }
 
 export const KeepNotesClient: React.FC<KeepNotesClientProps> = ({
-  googleToken,
-  theme,
-  triggerToast
+  googleToken = null,
+  theme = 'cyberpunk',
+  triggerToast = (msg, type) => {}
 }) => {
   const [notes, setNotes] = useState<KeepNote[]>(() => {
     const saved = localStorage.getItem('azum_keep_notes');
