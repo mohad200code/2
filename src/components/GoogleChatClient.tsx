@@ -68,6 +68,7 @@ export const GoogleChatClient: React.FC<GoogleChatClientProps> = ({
   const [newMessageText, setNewMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [ignoreVirtualEntities, setIgnoreVirtualEntities] = useState(true);
 
   // Simulated Chat Room State
   const [simulatedChannels, setSimulatedChannels] = useState([
@@ -228,7 +229,7 @@ export const GoogleChatClient: React.FC<GoogleChatClientProps> = ({
     }
   };
 
-  // Simulated send message + AI automated response
+  // Simulated send message
   const handleSendSimulatedMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSimulatedText.trim()) return;
@@ -246,37 +247,8 @@ export const GoogleChatClient: React.FC<GoogleChatClientProps> = ({
       [selectedChannelId]: [...prev[selectedChannelId], userMsg],
     }));
 
-    const queryText = newSimulatedText;
     setNewSimulatedText('');
-
-    // Trigger AI response simulation
-    setAiResponding(true);
-    setTimeout(() => {
-      let aiText = '';
-      if (selectedChannelId === 'alerts') {
-        aiText = `Hello Admin. I have scanned the parameters for the Shandong hydraulic shear. The high pressure (320 Bar) was caused by a slight blockage in the return line filter. I suggest replacing filter part HF-902 during the upcoming maintenance scheduled on the machinery list. Ready to monitor further diagnostics.`;
-      } else if (selectedChannelId === 'logistics') {
-        aiText = `Shipping containers for Shandong Azum are currently tracked on schedule. The bill of lading has been synced to Google Drive. Restock timelines are perfectly updated in the Logistics schedule. Would you like me to trigger an export of the inventory list to Google Sheets as well?`;
-      } else {
-        aiText = `Understood. I've updated the regional team on the dispatch status of the machinery. I will stand by for further instructions or logs regarding catalog operations. Let me know if you would like me to generate a calendar reminder for the next restock.`;
-      }
-
-      setSimulatedMessages((prev) => ({
-        ...prev,
-        [selectedChannelId]: [
-          ...prev[selectedChannelId],
-          {
-            id: `ai-${Date.now()}`,
-            sender: 'Azum Smart AI',
-            avatar: '⚡',
-            text: aiText,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isAi: true,
-          },
-        ],
-      }));
-      setAiResponding(false);
-    }, 1500);
+    setAiResponding(false);
   };
 
   return (
@@ -340,28 +312,54 @@ export const GoogleChatClient: React.FC<GoogleChatClientProps> = ({
         </div>
       </div>
 
-      {/* Tabs list selector */}
-      <div className="flex border-b border-slate-800/40 gap-2 mb-4 shrink-0">
-        <button
-          onClick={() => setActiveTab('simulated')}
-          className={`pb-2.5 px-4 text-xs font-bold font-mono uppercase tracking-widest border-b-2 transition-all ${
-            activeTab === 'simulated'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          🛰️ STAGING CHANNELS
-        </button>
-        <button
-          onClick={() => setActiveTab('live')}
-          className={`pb-2.5 px-4 text-xs font-bold font-mono uppercase tracking-widest border-b-2 transition-all ${
-            activeTab === 'live'
-              ? 'border-[#00f0ff] text-[#00f0ff]'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          💬 GOOGLE CHAT SPACES
-        </button>
+      {/* Tabs list selector and controls */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-800/40 gap-4 mb-4 shrink-0">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('simulated')}
+            className={`pb-2.5 px-4 text-xs font-bold font-mono uppercase tracking-widest border-b-2 transition-all ${
+              activeTab === 'simulated'
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            🛰️ STAGING CHANNELS
+          </button>
+          <button
+            onClick={() => setActiveTab('live')}
+            className={`pb-2.5 px-4 text-xs font-bold font-mono uppercase tracking-widest border-b-2 transition-all ${
+              activeTab === 'live'
+                ? 'border-[#00f0ff] text-[#00f0ff]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            💬 GOOGLE CHAT SPACES
+          </button>
+        </div>
+
+        {/* Configuration toggle */}
+        <div className="flex items-center gap-2 pb-2 sm:pb-0">
+          <button
+            type="button"
+            onClick={() => {
+              setIgnoreVirtualEntities(!ignoreVirtualEntities);
+              triggerToast(
+                !ignoreVirtualEntities 
+                  ? "Virtual/Bot entities are now ignored in chat interfaces." 
+                  : "Virtual/Bot entities are now visible in chat interfaces.",
+                "success"
+              );
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border text-[10px] font-bold font-mono transition-all cursor-pointer ${
+              ignoreVirtualEntities
+                ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 hover:bg-amber-500/20'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5" />
+            <span>IGNORE VIRTUAL ENTITIES: {ignoreVirtualEntities ? 'ON' : 'OFF'}</span>
+          </button>
+        </div>
       </div>
 
       {/* Main chat layout */}

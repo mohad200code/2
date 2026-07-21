@@ -29,13 +29,13 @@ export const ParallaxCard: React.FC<ParallaxCardProps> = ({
   // Spring configuration for premium tactile elasticity
   const springConfig = { damping: 22, stiffness: 160, mass: 0.6 };
 
-  // 3D rotation calculations (tilt) - Increased intensity to 35 degrees for pronounced 3D tilt
-  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [35, -35]), springConfig);
-  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-35, 35]), springConfig);
+  // 3D rotation calculations (tilt) - Balanced intensity for smooth, premium 3D tilt without clipping
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [12, -12]), springConfig);
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-12, 12]), springConfig);
 
-  // 2D translation offsets (magnetic pull toward cursor) - Increased slightly for greater kinetic feel
-  const translateX = useSpring(useTransform(mouseX, [-0.5, 0.5], [-16, 16]), springConfig);
-  const translateY = useSpring(useTransform(mouseY, [-0.5, 0.5], [-16, 16]), springConfig);
+  // 2D translation offsets (magnetic pull toward cursor) - Balanced kinetic feel
+  const translateX = useSpring(useTransform(mouseX, [-0.5, 0.5], [-6, 6]), springConfig);
+  const translateY = useSpring(useTransform(mouseY, [-0.5, 0.5], [-6, 6]), springConfig);
 
   // Scale spring
   const scale = useSpring(1, springConfig);
@@ -73,7 +73,7 @@ export const ParallaxCard: React.FC<ParallaxCardProps> = ({
     // Parallax sub-element image alignment if any element has .parallax-img class
     const img = card.querySelector('.parallax-img');
     if (img) {
-      (img as HTMLElement).style.transform = `scale(1.08) translate3d(${normalizedX * 18}px, ${normalizedY * 18}px, 35px) rotateX(${normalizedY * -8}deg) rotateY(${normalizedX * 8}deg)`;
+      (img as HTMLElement).style.transform = `scale(1.05) translate(${normalizedX * 10}px, ${normalizedY * 10}px)`;
     }
   };
 
@@ -108,7 +108,7 @@ export const ParallaxCard: React.FC<ParallaxCardProps> = ({
       const img = card.querySelector('.parallax-img');
       if (img) {
         (img as HTMLElement).style.transition = 'transform 0.5s cubic-bezier(0.25, 1, 0.5, 1)';
-        (img as HTMLElement).style.transform = 'scale(1) translate3d(0px, 0px, 0px) rotateX(0deg) rotateY(0deg)';
+        (img as HTMLElement).style.transform = 'scale(1) translate(0px, 0px)';
       }
     }
   };
@@ -129,7 +129,7 @@ export const ParallaxCard: React.FC<ParallaxCardProps> = ({
         y: translateY,
         scale,
         transformStyle: 'preserve-3d',
-        perspective: '420px',
+        perspective: '1000px',
       }}
       className={`group intense-hover-card all-products-glowing-shadow rounded-3xl p-5 border relative flex flex-col justify-between cursor-pointer transition-shadow duration-300 theme-${theme} ${
         isLoading ? 'is-loading' : ''

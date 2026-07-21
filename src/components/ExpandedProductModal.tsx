@@ -2,10 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   X, Star, Heart, ShoppingCart, Truck, Wrench, ShieldCheck, 
-  Plus, Minus, Info, Globe, Award, Scale, Anchor, Package, FileText 
+  Plus, Minus, Info, Globe, Award, Scale, Anchor, Package, FileText,
+  LineChart
 } from 'lucide-react';
 import { Product } from '../types';
 import { ProductSVG } from './ProductSVG';
+import { PriceSparkline } from './PriceSparkline';
 
 interface ExpandedProductModalProps {
   product: Product;
@@ -37,7 +39,7 @@ export const ExpandedProductModal: React.FC<ExpandedProductModalProps> = ({
   handleAddToCart,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState<'logistics' | 'materials' | 'compliance'>('logistics');
+  const [activeTab, setActiveTab] = useState<'logistics' | 'materials' | 'compliance' | 'market'>('logistics');
   const [selectedSize, setSelectedSize] = useState<string>(product.sizes?.[0] || 'Standard');
   const [selectedColor, setSelectedColor] = useState<{ name: string; value: string }>(
     product.colors?.[0] || { name: 'Industrial Gray', value: '#64748B' }
@@ -623,14 +625,15 @@ export const ExpandedProductModal: React.FC<ExpandedProductModalProps> = ({
                 {[
                   { id: 'logistics', label: 'Logistics', icon: <Truck className="w-3.5 h-3.5" /> },
                   { id: 'materials', label: 'Materials', icon: <Wrench className="w-3.5 h-3.5" /> },
-                  { id: 'compliance', label: 'Compliance', icon: <ShieldCheck className="w-3.5 h-3.5" /> }
+                  { id: 'compliance', label: 'Compliance', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+                  { id: 'market', label: 'Market Intel', icon: <LineChart className="w-3.5 h-3.5" /> }
                 ].map(tab => {
                   const isActive = activeTab === tab.id;
                   return (
                     <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id as any)}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider font-mono transition-all cursor-pointer border ${
+                       key={tab.id}
+                       onClick={() => setActiveTab(tab.id as any)}
+                       className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wider font-mono transition-all cursor-pointer border ${
                         isActive
                           ? theme === 'cyberpunk'
                             ? 'bg-pink-500 border-pink-500 text-white shadow-[0_0_10px_rgba(236,72,153,0.3)]'
@@ -648,34 +651,36 @@ export const ExpandedProductModal: React.FC<ExpandedProductModalProps> = ({
               </div>
 
               {/* Editing & Auto-save Status Controls */}
-              <div className="flex items-center gap-2">
-                <AnimatePresence>
-                  {showSavedBadge && (
-                    <motion.span
-                      initial={{ opacity: 0, x: 5 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="text-[9px] text-emerald-400 font-mono font-black uppercase tracking-wider flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                      Auto-Saved
-                    </motion.span>
-                  )}
-                </AnimatePresence>
+              {activeTab !== 'market' && (
+                <div className="flex items-center gap-2">
+                  <AnimatePresence>
+                    {showSavedBadge && (
+                      <motion.span
+                        initial={{ opacity: 0, x: 5 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-[9px] text-emerald-400 font-mono font-black uppercase tracking-wider flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                        Auto-Saved
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
 
-                <button
-                  onClick={() => setIsEditingSpecs(!isEditingSpecs)}
-                  className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest font-mono border transition-all cursor-pointer ${
-                    isEditingSpecs
-                      ? 'bg-rose-600 border-rose-500 text-white hover:bg-rose-700 shadow-md'
-                      : theme === 'day'
-                        ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
-                        : 'bg-slate-800/80 border-slate-750 text-slate-300 hover:bg-slate-750 hover:text-white'
-                  }`}
-                >
-                  {isEditingSpecs ? '✓ Finish' : '✎ Edit Spec'}
-                </button>
-              </div>
+                  <button
+                    onClick={() => setIsEditingSpecs(!isEditingSpecs)}
+                    className={`px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest font-mono border transition-all cursor-pointer ${
+                      isEditingSpecs
+                        ? 'bg-rose-600 border-rose-500 text-white hover:bg-rose-700 shadow-md'
+                        : theme === 'day'
+                          ? 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                          : 'bg-slate-800/80 border-slate-750 text-slate-300 hover:bg-slate-750 hover:text-white'
+                    }`}
+                  >
+                    {isEditingSpecs ? '✓ Finish' : '✎ Edit Spec'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Spec items grid with animated entrance */}
@@ -684,7 +689,11 @@ export const ExpandedProductModal: React.FC<ExpandedProductModalProps> = ({
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
-              className={`grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-4 rounded-2xl border ${
+              className={`${
+                activeTab === 'market'
+                  ? 'flex flex-col sm:flex-row gap-4 p-4 rounded-2xl border min-h-[220px]'
+                  : 'grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-4 rounded-2xl border'
+              } ${
                 theme === 'day' 
                   ? 'bg-slate-50 border-slate-200' 
                   : theme === 'night' 
@@ -692,33 +701,86 @@ export const ExpandedProductModal: React.FC<ExpandedProductModalProps> = ({
                     : 'bg-slate-950/50 border-pink-500/10'
               }`}
             >
-              {editableSpecs[activeTab].map((spec, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 font-mono">
-                    {getIconForLabel(spec.label)}
-                    <span>{spec.label}</span>
+              {activeTab === 'market' ? (
+                <div className="flex flex-col sm:flex-row gap-4 w-full h-full min-h-[200px]">
+                  {/* Left Column: Sparkline container */}
+                  <div className="flex-1 min-h-[140px] relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950">
+                    <PriceSparkline
+                      basePrice={product.price}
+                      productId={product.id}
+                      theme={theme}
+                    />
                   </div>
 
-                  {isEditingSpecs ? (
-                    <input
-                      type="text"
-                      value={spec.value}
-                      onChange={(e) => handleSpecChange(activeTab, idx, e.target.value)}
-                      className={`w-full px-2 py-1 text-xs rounded-lg border outline-none font-bold transition-all ${
-                        theme === 'day'
-                          ? 'bg-white border-slate-300 text-slate-850 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/10'
-                          : 'bg-slate-900 border-slate-750 text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500/10'
-                      }`}
-                    />
-                  ) : (
-                    <p className={`text-xs font-bold leading-tight ${
-                      theme === 'day' ? 'text-slate-800' : 'text-slate-200'
-                    }`}>
-                      {spec.value}
-                    </p>
-                  )}
+                  {/* Right Column: AI Analysis Thinking process */}
+                  <div className="flex-1 flex flex-col justify-between bg-slate-100/50 dark:bg-black/30 p-3 rounded-xl border border-slate-200 dark:border-slate-800 font-mono text-[10px]">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-1.5">
+                        <span className="text-[10px] font-black text-indigo-500 dark:text-indigo-450 uppercase tracking-widest flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Azum Cognitive Brain™
+                        </span>
+                        <span className="text-[8px] text-slate-500">v1.2-beta</span>
+                      </div>
+
+                      {/* Thinking steps simulation */}
+                      <div className="space-y-1 text-slate-500 dark:text-slate-400 text-[9px] leading-tight max-h-[75px] overflow-y-auto">
+                        <div className="flex gap-1.5 items-start">
+                          <span className="text-emerald-500">▶</span>
+                          <span>[LOAD] Initialized pricing model for <b>{product.name}</b> (Base: ${product.price})</span>
+                        </div>
+                        <div className="flex gap-1.5 items-start">
+                          <span className="text-emerald-500">▶</span>
+                          <span>[CALC] Compiled 6M historical price variations from logistics registry.</span>
+                        </div>
+                        <div className="flex gap-1.5 items-start">
+                          <span className="text-indigo-500 dark:text-indigo-400">⚡</span>
+                          <span>[PREDICT] Projected demand factor: <b>+{(Math.abs(product.salesCount * 0.12 - 5) + 2).toFixed(1)}%</b> for next fiscal quarter.</span>
+                        </div>
+                        <div className="flex gap-1.5 items-start">
+                          <span className="text-indigo-500 dark:text-indigo-400">⚡</span>
+                          <span>[MARGIN] Net profit index: <b>{(22.5 + (product.price % 15)).toFixed(1)}%</b> under standard freight agreements.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 pt-1.5 border-t border-slate-200 dark:border-slate-800/80 text-slate-700 dark:text-slate-350 font-sans text-xs leading-relaxed space-y-1">
+                      <span className="font-mono text-[9px] font-bold text-pink-500 uppercase block tracking-wider">Strategic Advisory:</span>
+                      <p className="text-slate-600 dark:text-slate-400 text-[11px]">
+                        The price for <b>{product.name}</b> remains resilient. Due to {product.category.toLowerCase().includes('parts') ? 'high machining tolerances' : 'robust factory throughput'} and stable logistics pipelines, Azum brain recommends maintaining a minimum stock safety threshold of <b>{Math.round(product.stock * 0.4 + 4)} units</b> to capitalize on incoming Middle East demand surges.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              ))}
+              ) : (
+                editableSpecs[activeTab as 'logistics' | 'materials' | 'compliance'].map((spec, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400 font-mono">
+                      {getIconForLabel(spec.label)}
+                      <span>{spec.label}</span>
+                    </div>
+
+                    {isEditingSpecs ? (
+                      <input
+                        type="text"
+                        value={spec.value}
+                        onChange={(e) => handleSpecChange(activeTab as any, idx, e.target.value)}
+                        className={`w-full px-2 py-1 text-xs rounded-lg border outline-none font-bold transition-all ${
+                          theme === 'day'
+                            ? 'bg-white border-slate-300 text-slate-850 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/10'
+                            : 'bg-slate-900 border-slate-750 text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500/10'
+                        }`}
+                      />
+                    ) : (
+                      <p className={`text-xs font-bold leading-tight ${
+                        theme === 'day' ? 'text-slate-800' : 'text-slate-200'
+                      }`}>
+                        {spec.value}
+                      </p>
+                    )}
+                  </div>
+                ))
+              )}
             </motion.div>
           </div>
 

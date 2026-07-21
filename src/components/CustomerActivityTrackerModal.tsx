@@ -290,7 +290,9 @@ export const CustomerActivityTrackerModal: React.FC<CustomerActivityTrackerModal
                 <Clock className="w-4 h-4 text-indigo-400" />
               </div>
               <div className="mt-2">
-                <span className="text-3xl font-black font-mono tracking-tight text-white">{activities.length}</span>
+                <span className={`text-3xl font-black font-mono tracking-tight ${
+                  theme === 'day' ? 'text-slate-900' : 'text-white'
+                }`}>{activities.length}</span>
                 <p className="text-[10px] text-slate-400 mt-1">Telemetry buffer actively recording clicks, inputs, and voice sweeps</p>
               </div>
             </div>
@@ -424,8 +426,12 @@ export const CustomerActivityTrackerModal: React.FC<CustomerActivityTrackerModal
           </div>
 
           {/* Activities List / Table */}
-          <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950/40">
-            <div className="max-h-[350px] overflow-y-auto divide-y divide-slate-800/60">
+          <div className={`border rounded-2xl overflow-hidden ${
+            theme === 'day' ? 'bg-slate-50/40 border-slate-200' : 'bg-slate-950/40 border-slate-800'
+          }`}>
+            <div className={`max-h-[350px] overflow-y-auto divide-y ${
+              theme === 'day' ? 'divide-slate-200' : 'divide-slate-800/60'
+            }`}>
               {processedActivities.length === 0 ? (
                 <div className="py-12 flex flex-col items-center justify-center text-slate-500 font-mono text-center">
                   <Activity className="w-8 h-8 mb-2 animate-pulse text-indigo-400/50" />
@@ -437,7 +443,9 @@ export const CustomerActivityTrackerModal: React.FC<CustomerActivityTrackerModal
                   variants={listContainerVariants}
                   initial="hidden"
                   animate="visible"
-                  className="divide-y divide-slate-800/60 w-full"
+                  className={`divide-y w-full ${
+                    theme === 'day' ? 'divide-slate-200' : 'divide-slate-800/60'
+                  }`}
                 >
                   <AnimatePresence mode="popLayout">
                     {processedActivities.map((log) => (
@@ -445,11 +453,17 @@ export const CustomerActivityTrackerModal: React.FC<CustomerActivityTrackerModal
                         key={log.id}
                         variants={listItemVariants}
                         layout
-                        className="p-4 flex flex-col md:flex-row md:items-start justify-between gap-4 hover:bg-slate-900/20 transition-colors border-b border-slate-800/60 last:border-0"
+                        className={`p-4 flex flex-col md:flex-row md:items-start justify-between gap-4 hover:bg-slate-900/10 dark:hover:bg-slate-900/20 transition-colors border-b last:border-0 ${
+                          theme === 'day' ? 'border-slate-200' : 'border-slate-800/60'
+                        }`}
                       >
                         <div className="flex gap-3 items-start">
                           {/* Device Icon */}
-                          <div className="p-2 rounded-xl bg-slate-900 border border-slate-800 shrink-0 text-slate-400 mt-0.5">
+                          <div className={`p-2 rounded-xl shrink-0 mt-0.5 border ${
+                            theme === 'day' 
+                              ? 'bg-white border-slate-200 text-slate-500' 
+                              : 'bg-slate-900 border-slate-800 text-slate-400'
+                          }`}>
                             {log.device === 'Mobile' ? (
                               <Smartphone className="w-4 h-4 text-cyan-400" />
                             ) : log.device === 'Industrial Terminal' ? (
@@ -462,7 +476,9 @@ export const CustomerActivityTrackerModal: React.FC<CustomerActivityTrackerModal
                           {/* Log details */}
                           <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs font-black text-slate-100">{log.description}</span>
+                              <span className={`text-xs font-black ${
+                                theme === 'day' ? 'text-slate-800' : 'text-slate-100'
+                              }`}>{log.description}</span>
                               {getLogTypeBadge(log.type)}
                             </div>
                             <p className="text-xs text-slate-400 leading-relaxed font-mono">{log.details}</p>

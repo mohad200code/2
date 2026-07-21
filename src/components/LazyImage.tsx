@@ -14,10 +14,10 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   referrerPolicy
 }) => {
   const [isIntersected, setIsIntersected] = useState(false);
-  const containerRef = useRef<HTMLImageElement>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // If the browser doesn't support IntersectionObserver, fallback to instant load
     if (typeof window === 'undefined' || !window.IntersectionObserver) {
       setIsIntersected(true);
       return;
@@ -31,7 +31,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
         }
       },
       {
-        rootMargin: '150px', // Pre-fetch 150px before entering viewport for an uninterrupted feel
+        rootMargin: '150px',
         threshold: 0.01,
       }
     );
@@ -47,12 +47,41 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   }, []);
 
   return (
-    <img
-      ref={containerRef}
-      src={isIntersected ? src : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 1 1"></svg>'}
-      alt={alt}
-      className={`${className} transition-opacity duration-500 ${isIntersected ? 'opacity-100' : 'opacity-20'}`}
-      referrerPolicy={referrerPolicy}
-    />
+    <div ref={containerRef} className="relative w-full h-full bg-[#030611] overflow-hidden rounded-2xl">
+      {/* Premium Cyberpunk Skeleton Screen */}
+      {(!isIntersected || !isLoaded) && (
+        <div className="absolute inset-0 z-10 flex flex-col justify-between p-4 animate-pulse bg-gradient-to-br from-[#0c0f1d] via-[#12162a] to-[#070914]">
+          {/* Skeleton Top Accents */}
+          <div className="flex justify-between items-center">
+            <div className="w-8 h-8 rounded-full bg-slate-800/40" />
+            <div className="w-16 h-4 rounded-lg bg-slate-800/40" />
+          </div>
+          {/* Skeleton Center Graphic Placeholder */}
+          <div className="w-16 h-16 rounded-2xl bg-slate-800/20 mx-auto border border-slate-800/40 flex items-center justify-center">
+            <div className="w-8 h-8 rounded bg-slate-800/30" />
+          </div>
+          {/* Skeleton Bottom Accents */}
+          <div className="space-y-2">
+            <div className="w-2/3 h-3.5 bg-slate-800/40 rounded" />
+            <div className="w-1/2 h-2.5 bg-slate-800/20 rounded" />
+          </div>
+          {/* Shimmer overlay effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full animate-[shimmer_1.5s_infinite]" />
+        </div>
+      )}
+
+      {/* Actual Image */}
+      {isIntersected && (
+        <img
+          src={src}
+          alt={alt}
+          onLoad={() => setIsLoaded(true)}
+          className={`${className} transition-all duration-700 ease-out ${
+            isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'
+          }`}
+          referrerPolicy={referrerPolicy}
+        />
+      )}
+    </div>
   );
 };

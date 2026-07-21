@@ -149,7 +149,7 @@ export const PriceSparkline: React.FC<PriceSparklineProps> = ({
 
   return (
     <div 
-      className="absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col justify-between p-3 select-none z-20 font-mono text-[9px] rounded-2xl border border-indigo-500/20"
+      className="sparkline-card-container absolute inset-0 bg-slate-950/85 backdrop-blur-xs flex flex-col justify-between p-3 select-none z-20 font-mono text-[9px] rounded-2xl border border-indigo-500/20"
       onClick={(e) => e.stopPropagation()} // Prevent card click trigger
     >
       {/* Title Header */}
@@ -208,6 +208,10 @@ export const PriceSparkline: React.FC<PriceSparklineProps> = ({
           <path 
             d={areaPath} 
             fill={`url(#area-grad-${productId})`} 
+            style={{
+              opacity: 0,
+              animation: 'sparkline-area-fade 1.2s cubic-bezier(0.25, 1, 0.5, 1) 0.3s forwards'
+            }}
           />
 
           {/* Line Path */}
@@ -217,6 +221,11 @@ export const PriceSparkline: React.FC<PriceSparklineProps> = ({
             stroke={colors.line} 
             strokeWidth="2" 
             filter={theme === 'cyberpunk' ? `url(#glow-${productId})` : undefined}
+            style={{
+              strokeDasharray: 600,
+              strokeDashoffset: 600,
+              animation: 'sparkline-draw 1.2s cubic-bezier(0.25, 1, 0.5, 1) forwards'
+            }}
           />
 
           {/* Interaction Dots and Overlay */}

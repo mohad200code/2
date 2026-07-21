@@ -264,7 +264,13 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
               </div>
               <div className="flex justify-between py-2.5">
                 <span className="text-slate-400">Status:</span>
-                <span id="detail-status" className={`font-bold uppercase tracking-wider text-[10px] ${u.status === 'active' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <span id="detail-status" className={`font-bold uppercase tracking-wider text-[10px] ${
+                  u.status === 'active'
+                    ? 'text-emerald-400'
+                    : u.status === 'suspended' || u.status === 'banned'
+                      ? 'text-rose-400'
+                      : 'text-amber-400 animate-pulse'
+                }`}>
                   {u.status}
                 </span>
               </div>
@@ -605,7 +611,9 @@ export const AdminUsers: React.FC<AdminUsersProps> = ({ users, onDeleteUsers, on
                           className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${
                             u.status === 'active'
                               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                              : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                              : u.status === 'suspended' || u.status === 'banned'
+                                ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
                           }`}
                         >
                           {u.status}

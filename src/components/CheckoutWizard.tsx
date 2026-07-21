@@ -18,6 +18,8 @@ interface CheckoutWizardProps {
   onConnectGmail?: () => void;
   language?: 'en' | 'zh' | 'ar';
   currentUser?: any;
+  onContinueShopping?: () => void;
+  formatPrice?: (amount: number) => string;
 }
 
 const wizardTranslations = {
@@ -186,8 +188,11 @@ export const CheckoutWizard: React.FC<CheckoutWizardProps> = ({
   onConnectGmail,
   language = 'en',
   currentUser = null,
+  onContinueShopping,
+  formatPrice,
 }) => {
   const t = wizardTranslations[language];
+  const displayPrice = formatPrice || ((val: number) => `$${val.toFixed(2)}`);
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [paymentError, setPaymentError] = useState<string>('');
@@ -526,6 +531,15 @@ export const CheckoutWizard: React.FC<CheckoutWizardProps> = ({
                 <ShoppingBag className="w-16 h-16 text-slate-300 mx-auto" />
                 <h3 className="text-lg font-bold text-slate-700">{t.emptyCart}</h3>
                 <p className="text-slate-400">{t.emptyCartSub}</p>
+                {onContinueShopping && (
+                  <button
+                    type="button"
+                    onClick={onContinueShopping}
+                    className="mt-4 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg inline-flex items-center gap-1.5 cursor-pointer font-sans"
+                  >
+                    <span>{language === 'zh' ? '继续购物' : language === 'ar' ? 'متابعة التسوق' : 'Continue Shopping'}</span>
+                  </button>
+                )}
               </div>
             ) : (
               cart.map((item, index) => (
@@ -589,11 +603,11 @@ export const CheckoutWizard: React.FC<CheckoutWizardProps> = ({
 
                     <div className="text-right">
                       <p className="font-bold text-slate-900 text-base">
-                        ${(item.product.price * item.quantity).toFixed(2)}
+                        {displayPrice(item.product.price * item.quantity)}
                       </p>
                       {item.quantity > 1 && (
                         <p className="text-xs text-slate-400">
-                          (${item.product.price.toFixed(2)} x {item.quantity})
+                          ({displayPrice(item.product.price)} x {item.quantity})
                         </p>
                       )}
                     </div>
@@ -617,21 +631,21 @@ export const CheckoutWizard: React.FC<CheckoutWizardProps> = ({
             <div className="space-y-3.5 text-sm">
               <div className="flex justify-between text-slate-600">
                 <span>{t.subtotal}</span>
-                <span id="summary-subtotal" className="font-bold text-slate-900">${subtotal.toFixed(2)}</span>
+                <span id="summary-subtotal" className="font-bold text-slate-900">{displayPrice(subtotal)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>{language === 'zh' ? '特惠折扣 (10%)' : language === 'ar' ? 'خصم (10%)' : 'Discount(10%)'}</span>
-                <span id="summary-discount" className="font-bold text-emerald-600">-${discount.toFixed(2)}</span>
+                <span id="summary-discount" className="font-bold text-emerald-600">-{displayPrice(discount)}</span>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>{language === 'zh' ? '配送费用' : language === 'ar' ? 'رسوم الشحن' : 'Shipping Fee'}</span>
                 <span id="summary-shipping" className="font-bold text-slate-900">
-                  {shippingFee === 0 ? t.free : `+$${shippingFee.toFixed(2)}`}
+                  {shippingFee === 0 ? t.free : `+${displayPrice(shippingFee)}`}
                 </span>
               </div>
               <div className="border-t border-slate-100 pt-3 flex justify-between font-bold text-base text-slate-900">
                 <span>{t.total}</span>
-                <span id="summary-total" className="text-slate-900">${total.toFixed(2)}</span>
+                <span id="summary-total" className="text-slate-900">{displayPrice(total)}</span>
               </div>
             </div>
 

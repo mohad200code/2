@@ -11,12 +11,14 @@ import {
   Search,
   Check,
   X,
+  AlertTriangle,
   User as UserIcon,
   ExternalLink,
   ChevronRight,
   ChevronLeft,
   PlusCircle,
   FolderPlus,
+  Folder,
   Users,
   CreditCard,
   Plus,
@@ -36,6 +38,8 @@ import {
   Sun,
   Cpu,
   Layers,
+  GripVertical,
+  Palette,
   Bot,
   ClipboardList,
   Monitor,
@@ -77,7 +81,8 @@ import {
   Tag,
   CheckSquare,
   Maximize,
-  Copy
+  Copy,
+  Filter
 } from 'lucide-react';
 
 import { Product, User as UserType, Order, CartItem } from './types';
@@ -100,12 +105,16 @@ import { PriceSparkline } from './components/PriceSparkline';
 import { GmailClient } from './components/GmailClient';
 import { GoogleChatClient } from './components/GoogleChatClient';
 import { StockHistoryChart } from './components/StockHistoryChart';
+import { StockMarketView } from './components/StockMarketView';
 import { CameraScannerModal } from './components/CameraScannerModal';
 import { CustomerActivityTrackerModal, UserActivityLog } from './components/CustomerActivityTrackerModal';
 import { InventorySparkline } from './components/InventorySparkline';
+import { AdminStockSparkline } from './components/AdminStockSparkline';
 import { AdminGuard } from './components/AdminGuard';
-import jarvisCore from './assets/images/jarvis_core_1783511468932.jpg';
-import jarvisHelmet from './assets/images/robot_helmet_avatar_1783511486718.jpg';
+import { KeepNotesClient } from './components/KeepNotesClient';
+import { GooglePickerClient } from './components/GooglePickerClient';
+import { useAdminSidebar } from './components/AdminSidebarContext';
+import { MachineryGeolocationTracker } from './components/MachineryGeolocationTracker';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ResponsiveContainer,
@@ -470,7 +479,7 @@ const translations = {
     price: "Price ($)",
     imageUrl: "Image URL",
     createProduct: "Create Product",
-    aiAssistant: "Jarvis AI",
+    aiAssistant: "Gemini AI",
     aiDescription: "Interactive automated sales agent & delivery dispatcher.",
     askAi: "Ask anything about our catalog...",
     guestMode: "Guest View",
@@ -512,7 +521,7 @@ const translations = {
     price: "设定价格 ($)",
     imageUrl: "商品图片网址",
     createProduct: "确认上架商品",
-    aiAssistant: "Jarvis AI 智能管家",
+    aiAssistant: "Gemini AI 智能管家",
     aiDescription: "微服务发货机器人与智能销售助手。",
     askAi: "向 AI 咨询关于我们商品的任何问题...",
     guestMode: "访客模式",
@@ -554,7 +563,7 @@ const translations = {
     price: "السعر بالدولار ($)",
     imageUrl: "رابط الصورة",
     createProduct: "إنشاء المنتج",
-    aiAssistant: "مساعد Jarvis الذكي",
+    aiAssistant: "مساعد Gemini الذكي",
     aiDescription: "عميل مبيعات ذكي وموزع آلي فوري للطلبات.",
     askAi: "اسأل أي شيء عن كتالوج المنتجات...",
     guestMode: "عرض كزائر",
@@ -614,9 +623,253 @@ function parseCSV(text: string): string[][] {
 }
 
 export default function App() {
+  // Dynamic Styles (Day / Night / Cyberpunk)
+  const [theme, setTheme] = useState<'day' | 'night' | 'cyberpunk'>(() => {
+    const saved = localStorage.getItem('cyberport_theme');
+    if (saved === 'day' || saved === 'night' || saved === 'cyberpunk') {
+      return saved;
+    }
+    return 'cyberpunk';
+  });
+
   // Navigation & Screen View State
   const [view, setView] = useState<'store' | 'product-details' | 'cart' | 'admin' | 'auth' | 'orders' | 'ai' | 'chat'>('store');
-  const [adminSubView, setAdminSubView] = useState<'overview' | 'inbox' | 'calendar' | 'search' | 'settings' | 'products' | 'add-product' | 'add-category' | 'users' | 'add-user' | 'transactions' | 'add-order' | 'analytics'>('overview');
+  const [adminSubView, setAdminSubView] = useState<'overview' | 'inbox' | 'calendar' | 'search' | 'settings' | 'products' | 'add-product' | 'add-category' | 'users' | 'add-user' | 'transactions' | 'add-order' | 'analytics' | 'keep' | 'picker'>('overview');
+  const [adminSearchText, setAdminSearchText] = useState<string>(() => (window as any).adminSearchVal || "");
+  // Server Uptime State
+  const [serverUptime, setServerUptime] = useState<number>(34512);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setServerUptime(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatUptime = (totalSeconds: number) => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    const pad = (num: number) => String(num).padStart(2, '0');
+    return `${pad(hours)}h ${pad(minutes)}m ${pad(secs)}s`;
+  };
+  const {
+    isApplicationExpanded,
+    setIsApplicationExpanded,
+    isProductsExpanded,
+    setIsProductsExpanded,
+    isUsersExpanded,
+    setIsUsersExpanded,
+    isOrdersExpanded,
+    setIsOrdersExpanded,
+    expandAll,
+    collapseAll,
+  } = useAdminSidebar();
+
+  const [adminUserStatusFilter, setAdminUserStatusFilter] = useState<'All' | 'Active' | 'Suspended' | 'Pending Verification'>('All');
+  const [adminUserQuickFilter, setAdminUserQuickFilter] = useState<string>('');
+  const [sidebarSearchQuery, setSidebarSearchQuery] = useState<string>('');
+
+  const getFilteredUsers = (userList: any[]) => {
+    if (!adminUserQuickFilter || !adminUserQuickFilter.trim()) return userList;
+    const q = adminUserQuickFilter.toLowerCase().trim();
+    return userList.filter(u => {
+      const status = (u.status || '').toLowerCase();
+      const role = (u.role || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      const username = (u.username || u.name || '').toLowerCase();
+      
+      // Match specific attributes requested by user: Active, Suspended, Pending
+      if (q === 'active') {
+        return status === 'active';
+      }
+      if (q === 'suspended' || q === 'susp' || q === 'banned') {
+        return status === 'suspended' || status === 'banned';
+      }
+      if (q === 'pending' || q === 'pend') {
+        return status === 'pending' || status === 'pending_verification';
+      }
+      
+      return status.includes(q) || role.includes(q) || email.includes(q) || username.includes(q);
+    });
+  };
+
+  // Sidebar custom state: drag and drop, custom theme, and collapsed state
+  const [sidebarCategoryOrder, setSidebarCategoryOrder] = useState<string[]>(() => {
+    const saved = localStorage.getItem('sdazum_sidebarCategoryOrder');
+    return saved ? JSON.parse(saved) : ['application', 'products', 'users', 'orders'];
+  });
+  const [draggedCat, setDraggedCat] = useState<string | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, catKey: string) => {
+    setDraggedCat(catKey);
+    e.dataTransfer.setData('text/plain', catKey);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent, targetCatKey: string) => {
+    e.preventDefault();
+    const sourceCatKey = e.dataTransfer.getData('text/plain');
+    if (sourceCatKey && sourceCatKey !== targetCatKey) {
+      const currentOrder = [...sidebarCategoryOrder];
+      const sourceIdx = currentOrder.indexOf(sourceCatKey);
+      const targetIdx = currentOrder.indexOf(targetCatKey);
+      if (sourceIdx !== -1 && targetIdx !== -1) {
+        currentOrder.splice(sourceIdx, 1);
+        currentOrder.splice(targetIdx, 0, sourceCatKey);
+        setSidebarCategoryOrder(currentOrder);
+        localStorage.setItem('sdazum_sidebarCategoryOrder', JSON.stringify(currentOrder));
+      }
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedCat(null);
+  };
+
+  const [sidebarTheme, setSidebarTheme] = useState<'Cyberpunk' | 'Slate' | 'System Default'>(() => {
+    return (localStorage.getItem('sdazum_sidebarTheme') as any) || 'System Default';
+  });
+
+  const [reduceMotion, setReduceMotion] = useState<boolean>(() => {
+    return localStorage.getItem('sdazum_reduceMotion') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sdazum_reduceMotion', String(reduceMotion));
+    if (reduceMotion) {
+      document.documentElement.classList.add('reduce-motion');
+    } else {
+      document.documentElement.classList.remove('reduce-motion');
+    }
+  }, [reduceMotion]);
+
+  const [adminSearchHistory, setAdminSearchHistory] = useState<string[]>(() => {
+    const saved = localStorage.getItem('sdazum_adminSearchHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const addToSearchHistory = (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setAdminSearchHistory(prev => {
+      const filtered = prev.filter(q => q.toLowerCase() !== trimmed.toLowerCase());
+      const next = [trimmed, ...filtered].slice(0, 10);
+      localStorage.setItem('sdazum_adminSearchHistory', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem('sdazum_isSidebarCollapsed') === 'true';
+  });
+
+  const toggleSidebarCollapse = () => {
+    const nextVal = !isSidebarCollapsed;
+    setIsSidebarCollapsed(nextVal);
+    localStorage.setItem('sdazum_isSidebarCollapsed', String(nextVal));
+  };
+
+  const sbBg = 
+    sidebarTheme === 'Cyberpunk' ? 'bg-[#08020e] text-[#00f0ff] border-pink-500/30' :
+    sidebarTheme === 'Slate' ? 'bg-slate-900 text-slate-300 border-slate-800' :
+    (theme === 'day' ? 'bg-white text-slate-700 border-slate-200' : 'bg-[#0a0b10] text-slate-400 border-slate-800/80');
+
+  const sbText =
+    sidebarTheme === 'Cyberpunk' ? 'text-yellow-400 font-mono' :
+    sidebarTheme === 'Slate' ? 'text-slate-300' :
+    (theme === 'day' ? 'text-slate-700' : 'text-slate-400');
+
+  const sbBorder =
+    sidebarTheme === 'Cyberpunk' ? 'border-pink-500/20' :
+    sidebarTheme === 'Slate' ? 'border-slate-800' :
+    (theme === 'day' ? 'border-slate-100' : 'border-slate-800/60');
+
+  const sbSearchClass =
+    sidebarTheme === 'Cyberpunk' ? 'bg-[#130321] border-pink-500/40 text-[#00f0ff] placeholder-pink-500/40 focus:border-[#00f0ff]' :
+    sidebarTheme === 'Slate' ? 'bg-slate-950 border-slate-800 text-slate-100 placeholder-slate-500 focus:border-slate-600' :
+    (theme === 'day' ? 'bg-slate-50 border-slate-200 text-slate-800 placeholder-slate-400 focus:border-indigo-500' : 'bg-[#0d0e14] border-slate-800/80 text-white placeholder-slate-600 focus:border-[#00f0ff]');
+
+  const sbCatHeader =
+    sidebarTheme === 'Cyberpunk' ? 'text-pink-500 font-extrabold tracking-widest font-mono text-[9px]' :
+    sidebarTheme === 'Slate' ? 'text-slate-500 font-bold tracking-wider text-[9px]' :
+    (theme === 'day' ? 'text-slate-400 text-[9px]' : 'text-slate-600 text-[9px]');
+
+  const getSbItemClass = (isActive: boolean, subviewId?: string) => {
+    const ALL_SIDEBAR_SUBVIEWS = [
+      'overview', 'inbox', 'chat', 'calendar', 'search', 'settings',
+      'keep', 'picker', 'products', 'analytics', 'add-product',
+      'add-category', 'users', 'add-user', 'transactions', 'add-order'
+    ];
+    let isKeyboardFocused = keyboardFocusActive && 
+      sidebarKeyboardFocusIndex >= 0 && 
+      ALL_SIDEBAR_SUBVIEWS[sidebarKeyboardFocusIndex] === subviewId;
+    let baseClass = '';
+    if (isActive) {
+      if (sidebarTheme === 'Cyberpunk') {
+        baseClass = 'bg-pink-500/20 text-[#00f0ff] border-pink-500 animate-neon-border-cyberpunk';
+      } else if (sidebarTheme === 'Slate') {
+        baseClass = 'bg-slate-850 text-white border-slate-400 animate-neon-border-slate';
+      } else {
+        baseClass = theme === 'day'
+          ? 'bg-indigo-50 text-indigo-700 border-indigo-600 shadow-sm animate-neon-border-default-light'
+          : 'bg-[#00f0ff]/10 text-[#00f0ff] border-[#00f0ff] animate-neon-border-default-dark';
+      }
+    } else {
+      if (sidebarTheme === 'Cyberpunk') {
+        baseClass = 'text-purple-300 hover:text-yellow-400 hover:bg-pink-500/10 border-l-4 border-transparent';
+      } else if (sidebarTheme === 'Slate') {
+        baseClass = 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 border-l-4 border-transparent';
+      } else {
+        baseClass = theme === 'day'
+          ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50/50 border-l-4 border-transparent'
+          : 'text-slate-400 hover:text-white hover:bg-slate-900/30 border-l-4 border-transparent';
+      }
+    }
+
+    if (isKeyboardFocused) {
+      baseClass += ' ring-2 ring-indigo-500 ring-offset-1 ring-offset-slate-900 scale-102 shadow-[0_0_15px_rgba(99,102,241,0.5)] transition-all duration-150';
+    }
+    return baseClass;
+  };
+
+  const sbQuickActionClass = (isActive: boolean) => {
+    if (isActive) {
+      if (sidebarTheme === 'Cyberpunk') {
+        return 'bg-pink-500/20 text-[#00f0ff] border-pink-500 shadow-[0_0_8px_rgba(255,0,85,0.25)] border';
+      }
+      if (sidebarTheme === 'Slate') {
+        return 'bg-slate-800 text-white border-slate-500 border';
+      }
+      return theme === 'day'
+        ? 'bg-indigo-100 text-indigo-700 shadow-sm border border-indigo-200'
+        : 'bg-[#00f0ff]/15 text-[#00f0ff] border border-[#00f0ff]/40 shadow-[0_0_8px_rgba(0,240,255,0.15)]';
+    } else {
+      if (sidebarTheme === 'Cyberpunk') {
+        return 'bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 hover:text-white border border-purple-900/40';
+      }
+      if (sidebarTheme === 'Slate') {
+        return 'bg-slate-950 hover:bg-slate-900 text-slate-400 hover:text-white border border-slate-800';
+      }
+      return theme === 'day'
+        ? 'bg-slate-100 hover:bg-slate-200 text-slate-600 border border-transparent'
+        : 'bg-slate-900/60 hover:bg-slate-900 text-slate-400 hover:text-white border border-slate-800/60 hover:border-slate-700';
+    }
+  };
+
+  const sbNestedBg =
+    sidebarTheme === 'Cyberpunk' ? 'bg-[#180d2b]/60 border-[#ff0055]/20 text-purple-200' :
+    sidebarTheme === 'Slate' ? 'bg-slate-950 border-slate-800 text-slate-300' :
+    (theme === 'day' ? 'bg-slate-50/80 border-slate-200/85 text-slate-800' : 'bg-slate-950/40 border-slate-800/50 text-slate-300');
+
+  const sbHealthBg =
+    sidebarTheme === 'Cyberpunk' ? 'bg-[#150a24]/50 border-pink-500/20' :
+    sidebarTheme === 'Slate' ? 'bg-slate-950/50 border-slate-800' :
+    (theme === 'day' ? 'bg-slate-50/55 border-slate-200/80' : 'bg-slate-950/25 border-slate-850');
   const [adminProductLocFilter, setAdminProductLocFilter] = useState<'all' | 'missing-en' | 'missing-zh' | 'missing-ar' | 'missing-any'>('all');
   const [adminProductSort, setAdminProductSort] = useState<'name-asc' | 'price-asc' | 'price-desc' | 'sales-desc'>('name-asc');
   const [adminProductColumns, setAdminProductColumns] = useState({
@@ -628,6 +881,7 @@ export default function App() {
     salesCount: true,
     description: true,
   });
+  const [showAdminStockTrend, setShowAdminStockTrend] = useState<boolean>(false);
   const [productsLoaded, setProductsLoaded] = useState<boolean>(false);
   
   const [adminInbox, setAdminInbox] = useState<any[]>(() => {
@@ -671,15 +925,6 @@ export default function App() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [view]);
-
-  // Dynamic Styles (Day / Night / Cyberpunk)
-  const [theme, setTheme] = useState<'day' | 'night' | 'cyberpunk'>(() => {
-    const saved = localStorage.getItem('cyberport_theme');
-    if (saved === 'day' || saved === 'night' || saved === 'cyberpunk') {
-      return saved;
-    }
-    return 'cyberpunk';
-  });
 
   // Synchronize theme state to localStorage and root body styling
   useEffect(() => {
@@ -763,7 +1008,86 @@ export default function App() {
     }
   }, [products, productsLoaded]);
 
-  const [users, setUsers] = useState<UserType[]>([]);
+  const syncProductCatalog = async () => {
+    try {
+      const res = await fetch('/api/products');
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data.success && data.products !== null && Array.isArray(data.products)) {
+        setProducts(data.products);
+        triggerToast("Product catalog synchronized successfully with server!", "success");
+      } else {
+        triggerToast("Failed to retrieve product data from server.", "error");
+      }
+    } catch (err) {
+      console.error("Error syncing catalog:", err);
+      triggerToast("Error connecting to server. Please try again.", "error");
+    }
+  };
+
+  const renderProductSkeleton = () => {
+    return (
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(270px,1fr))] gap-6">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div 
+            key={i} 
+            className={`p-5 rounded-3xl border flex flex-col justify-between h-[420px] animate-pulse ${
+              theme === 'day' 
+                ? 'bg-white border-slate-150 shadow-sm' 
+                : theme === 'night' 
+                  ? 'bg-[#151829] border-slate-800' 
+                  : 'bg-slate-950/60 border-pink-500/10'
+            }`}
+          >
+            {/* Image Skeleton */}
+            <div className={`w-full h-44 rounded-2xl mb-4 ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+            
+            <div className="space-y-3.5 flex-1 flex flex-col justify-between">
+              <div>
+                {/* Category & Badge */}
+                <div className="flex gap-2 mb-2">
+                  <div className={`h-4 w-12 rounded ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+                  <div className={`h-4 w-16 rounded ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+                </div>
+                
+                {/* Title */}
+                <div className={`h-6 w-3/4 rounded mb-2 ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+                {/* Description */}
+                <div className={`h-3 w-full rounded ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+                <div className={`h-3 w-5/6 rounded mt-1.5 ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+              </div>
+
+              {/* Bottom stats and button */}
+              <div className="pt-4 border-t border-dashed border-slate-800/40 flex items-center justify-between font-mono">
+                <div className="space-y-1.5">
+                  <div className={`h-3 w-10 rounded ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+                  <div className={`h-5 w-16 rounded ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+                </div>
+                <div className={`h-10 w-24 rounded-xl ${theme === 'day' ? 'bg-slate-200' : 'bg-slate-800'}`} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const [users, setUsers] = useState<UserType[]>(() => {
+    return [
+      {
+        id: 'usr-1',
+        username: 'Mohab Mohand',
+        email: 'mohabmohnad9@gmail.com',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100',
+        status: 'active',
+        role: 'Administrator',
+        joinedDate: '7/10/2026',
+        walletBalance: 1500000.00
+      }
+    ];
+  });
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const savedUser = localStorage.getItem('cyberport_user');
@@ -796,6 +1120,9 @@ export default function App() {
   const [customEngravingName, setCustomEngravingName] = useState<string>('');
   const [detailQty, setDetailQty] = useState(1);
   const [priceHistoryActive, setPriceHistoryActive] = useState<Record<string, boolean>>({});
+  const [globalPriceSparklinesVisible, setGlobalPriceSparklinesVisible] = useState<boolean>(false);
+  const [sidebarKeyboardFocusIndex, setSidebarKeyboardFocusIndex] = useState<number>(-1);
+  const [keyboardFocusActive, setKeyboardFocusActive] = useState<boolean>(false);
 
   // New Grid Catalog Interactive States
   const [stockHistoryActive, setStockHistoryActive] = useState<Record<string, boolean>>({});
@@ -805,6 +1132,34 @@ export default function App() {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [blinkProductId, setBlinkProductId] = useState<string | null>(null);
+  const [cartBadgePulse, setCartBadgePulse] = useState<boolean>(false);
+  const [isSyncingHealth, setIsSyncingHealth] = useState<boolean>(false);
+  const [isSyncingCatalog, setIsSyncingCatalog] = useState<boolean>(false);
+  const handleSyncCatalog = () => {
+    setIsSyncingCatalog(true);
+    triggerToast("Initiating live catalog synchronization with remote endpoints...", "success");
+    setTimeout(() => {
+      setIsSyncingCatalog(false);
+      triggerToast("Product catalog synchronized successfully. 24 products updated.", "success");
+    }, 1500);
+  };
+  const [currency, setCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD');
+  const formatPrice = (amount: number): string => {
+    if (currency === 'EUR') {
+      return `€${(amount * 0.92).toFixed(2)}`;
+    }
+    if (currency === 'GBP') {
+      return `£${(amount * 0.78).toFixed(2)}`;
+    }
+    return `$${amount.toFixed(2)}`;
+  };
+
+  // Auto-update / synchronize directory health summary panel on user list change
+  useEffect(() => {
+    setIsSyncingHealth(true);
+    const timer = setTimeout(() => setIsSyncingHealth(false), 900);
+    return () => clearTimeout(timer);
+  }, [users]);
 
   // Initialize dynamic popularity recent views
   useEffect(() => {
@@ -848,6 +1203,39 @@ export default function App() {
   const [translatedSearchTerm, setTranslatedSearchTerm] = useState('');
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [storefrontCategories, setStorefrontCategories] = useState<string[]>(() => {
+    const saved = localStorage.getItem('sdazum_storefront_categories');
+    return saved ? JSON.parse(saved) : CATEGORIES;
+  });
+
+  const [draggedCategory, setDraggedCategory] = useState<string | null>(null);
+
+  const handleCategoryDragStart = (e: React.DragEvent, cat: string) => {
+    setDraggedCategory(cat);
+    e.dataTransfer.setData('text/plain', cat);
+  };
+
+  const handleCategoryDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleCategoryDrop = (e: React.DragEvent, targetCat: string) => {
+    e.preventDefault();
+    if (!draggedCategory || draggedCategory === targetCat) return;
+
+    const currentOrder = [...storefrontCategories];
+    const draggedIdx = currentOrder.indexOf(draggedCategory);
+    const targetIdx = currentOrder.indexOf(targetCat);
+
+    if (draggedIdx !== -1 && targetIdx !== -1) {
+      currentOrder.splice(draggedIdx, 1);
+      currentOrder.splice(targetIdx, 0, draggedCategory);
+      setStorefrontCategories(currentOrder);
+      localStorage.setItem('sdazum_storefront_categories', JSON.stringify(currentOrder));
+      triggerToast("Storefront categories reordered!", "success");
+    }
+    setDraggedCategory(null);
+  };
   const [sortBy, setSortBy] = useState<string>('default');
   const [catalogTagFilter, setCatalogTagFilter] = useState<'all' | 'high-demand' | 'low-stock' | 'new-arrivals'>('all');
   const [micLanguage, setMicLanguage] = useState<'ar' | 'zh' | 'en'>('en');
@@ -859,6 +1247,17 @@ export default function App() {
   const [bulkTagMode, setBulkTagMode] = useState<boolean>(false);
   const [selectedBulkProductIds, setSelectedBulkProductIds] = useState<string[]>([]);
   const [customTagInput, setCustomTagInput] = useState<string>('');
+  const [bulkConfirmModal, setBulkConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
 
   // New States for QR Code and Stock Alert Threshold
   const [qrCodeProduct, setQrCodeProduct] = useState<Product | null>(null);
@@ -889,6 +1288,37 @@ export default function App() {
   const [priceAlertEmail, setPriceAlertEmail] = useState<string>(() => {
     return localStorage.getItem('azum_price_email') || 'mohabmohnad9@gmail.com';
   });
+
+  // Effect to automatically monitor product prices against priceAlertThresholds
+  useEffect(() => {
+    if (!priceAlertThresholds || Object.keys(priceAlertThresholds).length === 0 || !products || products.length === 0) return;
+    
+    const triggeredAlerts: string[] = [];
+    const nextThresholds = { ...priceAlertThresholds };
+    let hasChanges = false;
+
+    products.forEach(p => {
+      const threshold = priceAlertThresholds[p.id];
+      if (threshold !== undefined && p.price <= threshold) {
+        triggeredAlerts.push(
+          `✉️ MOCK EMAIL NOTIFICATION\n-------------------------------\nTo: ${priceAlertEmail}\nSubject: Price Alert triggered for ${p.name}!\n\nGreat news! The machinery price dropped to $${p.price.toFixed(2)} (your alert was set at $${threshold.toFixed(2)}).`
+        );
+        delete nextThresholds[p.id];
+        hasChanges = true;
+      }
+    });
+
+    if (hasChanges) {
+      setPriceAlertThresholds(nextThresholds);
+      localStorage.setItem('azum_price_thresholds', JSON.stringify(nextThresholds));
+      triggeredAlerts.forEach(alertText => {
+        triggerToast("Price drop detected! Simulated alert email sent.", "success");
+        console.log(alertText);
+        // We'll also set a temporary overlay or visual indicator if needed, 
+        // but a clear console log and triggerToast is extremely safe and perfectly matches.
+      });
+    }
+  }, [products, priceAlertThresholds, priceAlertEmail]);
 
   // QR scanner, inventory sparkline, dimensions popover, and stock bounce animation states
   const [isQrScannerOpen, setIsQrScannerOpen] = useState<boolean>(false);
@@ -1043,6 +1473,95 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [view]);
 
+  // Global Keyboard Shortcuts for Sidebar Navigation (Alt+1, Alt+2, etc.)
+  useEffect(() => {
+    const handleGlobalShortcuts = (e: KeyboardEvent) => {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+        let targetView: any = null;
+        let viewLabel = '';
+        
+        if (e.key === '1') { targetView = 'overview'; viewLabel = 'Home'; }
+        else if (e.key === '2') { targetView = 'inbox'; viewLabel = 'Inbox'; }
+        else if (e.key === '3') { targetView = 'chat'; viewLabel = 'Google Chat'; }
+        else if (e.key === '4') { targetView = 'calendar'; viewLabel = 'Calendar'; }
+        else if (e.key === '5') { targetView = 'search'; viewLabel = 'Search'; }
+        else if (e.key === '6') { targetView = 'settings'; viewLabel = 'Settings'; }
+        else if (e.key === '7') { targetView = 'keep'; viewLabel = 'Google Keep Notes'; }
+        else if (e.key === '8') { targetView = 'picker'; viewLabel = 'Google Drive Picker'; }
+        else if (e.key === '9') { targetView = 'products'; viewLabel = 'See All Products'; }
+        else if (e.key === '0') { targetView = 'users'; viewLabel = 'See All Users'; }
+
+        if (targetView) {
+          e.preventDefault();
+          setView('admin');
+          setAdminSubView(targetView);
+          triggerToast(`Navigated to ${viewLabel} (Alt+${e.key})`, 'success');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalShortcuts);
+    return () => window.removeEventListener('keydown', handleGlobalShortcuts);
+  }, []);
+
+  // Sidebar arrow keys keyboard navigation for accessibility
+  useEffect(() => {
+    const handleArrowNavigation = (e: KeyboardEvent) => {
+      if (view !== 'admin') return;
+      
+      // Only trigger if focus is on document.body or inside admin-sidebar (not inside input/textarea fields)
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.hasAttribute('contenteditable'))) {
+        return;
+      }
+
+      const ALL_SIDEBAR_SUBVIEWS = [
+        'overview', 'inbox', 'chat', 'calendar', 'search', 'settings',
+        'keep', 'picker', 'products', 'analytics', 'add-product',
+        'add-category', 'users', 'add-user', 'transactions', 'add-order'
+      ];
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setKeyboardFocusActive(true);
+
+        let currentIndex = sidebarKeyboardFocusIndex;
+        if (currentIndex === -1) {
+          currentIndex = ALL_SIDEBAR_SUBVIEWS.indexOf(adminSubView);
+          if (currentIndex === -1) currentIndex = 0;
+        }
+
+        let nextIndex = currentIndex;
+        if (e.key === 'ArrowDown') {
+          nextIndex = (currentIndex + 1) % ALL_SIDEBAR_SUBVIEWS.length;
+        } else {
+          nextIndex = (currentIndex - 1 + ALL_SIDEBAR_SUBVIEWS.length) % ALL_SIDEBAR_SUBVIEWS.length;
+        }
+
+        setSidebarKeyboardFocusIndex(nextIndex);
+        triggerToast(`Focusing: ${ALL_SIDEBAR_SUBVIEWS[nextIndex]} (Press Enter or Space to open)`, 'success');
+      }
+
+      if ((e.key === 'Enter' || e.key === ' ') && keyboardFocusActive && sidebarKeyboardFocusIndex !== -1) {
+        e.preventDefault();
+        const selectedSubview = ALL_SIDEBAR_SUBVIEWS[sidebarKeyboardFocusIndex];
+        setAdminSubView(selectedSubview as any);
+        triggerToast(`Navigated to: ${selectedSubview}`, 'success');
+      }
+    };
+
+    const handleMouseActivity = () => {
+      setKeyboardFocusActive(false);
+    };
+
+    window.addEventListener('keydown', handleArrowNavigation);
+    window.addEventListener('mousemove', handleMouseActivity);
+    return () => {
+      window.removeEventListener('keydown', handleArrowNavigation);
+      window.removeEventListener('mousemove', handleMouseActivity);
+    };
+  }, [view, adminSubView, sidebarKeyboardFocusIndex, keyboardFocusActive]);
+
   const [trendHistoryActive, setTrendHistoryActive] = useState<Record<string, boolean>>({});
   const [lastStockUpdatedProductId, setLastStockUpdatedProductId] = useState<string | null>(null);
   const [hoveredDimensionsProductId, setHoveredDimensionsProductId] = useState<string | null>(null);
@@ -1099,18 +1618,28 @@ export default function App() {
 
   const handleApplyBulkTag = (tag: string) => {
     if (selectedBulkProductIds.length === 0) return;
-    setProducts(prev => {
-      const nextProds = prev.map(p => {
-        if (selectedBulkProductIds.includes(p.id)) {
-          return { ...p, customBadge: tag ? tag : undefined };
-        }
-        return p;
-      });
-      localStorage.setItem('cyberport_products', JSON.stringify(nextProds));
-      return nextProds;
+    const count = selectedBulkProductIds.length;
+    const actionText = tag ? `apply custom badge "${tag}"` : 'clear custom badges';
+    
+    setBulkConfirmModal({
+      isOpen: true,
+      title: 'Confirm Storefront Bulk Update',
+      message: `You are about to ${actionText} for ${count} selected storefront items. This action will apply immediately. Would you like to proceed?`,
+      onConfirm: () => {
+        setProducts(prev => {
+          const nextProds = prev.map(p => {
+            if (selectedBulkProductIds.includes(p.id)) {
+              return { ...p, customBadge: tag ? tag : undefined };
+            }
+            return p;
+          });
+          localStorage.setItem('cyberport_products', JSON.stringify(nextProds));
+          return nextProds;
+        });
+        triggerToast(tag ? `Applied tag "${tag}" to ${count} products` : `Cleared tags on ${count} products`, "success");
+        setSelectedBulkProductIds([]);
+      }
     });
-    triggerToast(tag ? `Applied tag "${tag}" to ${selectedBulkProductIds.length} products` : `Cleared tags on ${selectedBulkProductIds.length} products`, "success");
-    setSelectedBulkProductIds([]);
   };
 
   // Lightbox and categories horizontal drag-scroll states & event handlers
@@ -1306,6 +1835,106 @@ export default function App() {
 
   const isPrimaryAdmin = !!currentUser && currentUser.email.toLowerCase() === 'mohabmohnad9@gmail.com';
 
+  // Set Price Alert States & Synchronization Effects (placed here after currentUser is defined)
+  const [alertTargetPrice, setAlertTargetPrice] = useState<string>('');
+  const [alertEmail, setAlertEmail] = useState<string>('');
+  const [activeAlert, setActiveAlert] = useState<{ targetPrice: number; email: string } | null>(null);
+
+  // Sync selected product with its active alert
+  useEffect(() => {
+    if (selectedProduct) {
+      const savedAlerts = localStorage.getItem('sdazum_price_alerts');
+      if (savedAlerts) {
+        try {
+          const alerts = JSON.parse(savedAlerts);
+          const alert = alerts[selectedProduct.id];
+          if (alert && !alert.triggered) {
+            setActiveAlert({ targetPrice: alert.targetPrice, email: alert.email });
+            setAlertTargetPrice(String(alert.targetPrice));
+            setAlertEmail(alert.email);
+            return;
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      setActiveAlert(null);
+      setAlertTargetPrice('');
+      setAlertEmail(currentUser?.email || '');
+    }
+  }, [selectedProduct, currentUser]);
+
+  // Price Alert Background Scanner Effect
+  useEffect(() => {
+    const savedAlerts = localStorage.getItem('sdazum_price_alerts');
+    if (savedAlerts && products.length > 0) {
+      try {
+        const alerts = JSON.parse(savedAlerts) as Record<string, { targetPrice: number; email: string; triggered?: boolean }>;
+        let updated = false;
+        
+        products.forEach(p => {
+          const alert = alerts[p.id];
+          if (alert && !alert.triggered && p.price <= alert.targetPrice) {
+            // Trigger mock email notification
+            triggerToast(`📧 [MOCK EMAIL ALERT TO ${alert.email}]: "${p.name}" price fell to $${p.price}! (Target: $${alert.targetPrice})`, "success");
+            
+            // Mark as triggered
+            alert.triggered = true;
+            updated = true;
+            
+            if (selectedProduct && selectedProduct.id === p.id) {
+              setActiveAlert(null);
+            }
+          }
+        });
+        
+        if (updated) {
+          localStorage.setItem('sdazum_price_alerts', JSON.stringify(alerts));
+        }
+      } catch (e) {
+        console.error("Error checking price alerts", e);
+      }
+    }
+  }, [products, selectedProduct]);
+
+  const matchesSearch = (label: string) => {
+    if (!sidebarSearchQuery) return true;
+    return label.toLowerCase().includes(sidebarSearchQuery.toLowerCase());
+  };
+
+  const hasApplicationMatches = () => {
+    const items = ['Home'];
+    if (isMohab) {
+      items.push('Inbox', 'Google Chat', 'Calendar', 'Search', 'Settings', 'Google Keep Notes', 'Google Drive Picker');
+    }
+    return items.some(item => matchesSearch(item));
+  };
+
+  const hasProductsMatches = () => {
+    if (!isMohab) return false;
+    const items = ['See All Products', 'Product Analytics', 'Add Product', 'Add Category'];
+    return items.some(item => matchesSearch(item));
+  };
+
+  const hasUsersMatches = () => {
+    if (!isMohab) return false;
+    const items = ['See All Users', 'Add User'];
+    return items.some(item => matchesSearch(item));
+  };
+
+  const hasOrdersMatches = () => {
+    if (!isMohab) return false;
+    const items = ['See All Transactions', 'Add Order'];
+    return items.some(item => matchesSearch(item));
+  };
+
+  // Stock Market view guard: only mohabmohnad9@gmail.com has access to the stock market page
+  useEffect(() => {
+    if (view === 'stocks' && !isMohab) {
+      setView('store');
+    }
+  }, [view, isMohab]);
+
   const [inlineUploadedImage, setInlineUploadedImage] = useState<string | null>(null);
 
   const [telemetry, setTelemetry] = useState(() => {
@@ -1352,25 +1981,31 @@ export default function App() {
 
           logUserActivity('voice', 'Voice Query Decoded', `Speech transcript: "${transcript}" (Language: ${micLanguage})`);
 
-          if (speech.includes("go to orders") || speech.includes("view orders") || speech.includes("show orders")) {
+          if (speech.includes("go to orders") || speech.includes("view orders") || speech.includes("show orders") || speech.includes("order tracker") || speech.includes("orders tracker") || speech.includes("go to tracker") || speech.includes("open tracker")) {
             setView('orders');
             triggerToast("🎤 Executing Voice Command: Opened Orders Tracker", "success");
-          } else if (speech.includes("go to store") || speech.includes("view store") || speech.includes("show store") || speech.includes("go to home") || speech.includes("go to homepage")) {
+          } else if (speech.includes("go to store") || speech.includes("view store") || speech.includes("show store") || speech.includes("go to home") || speech.includes("go to homepage") || speech.includes("shop") || speech.includes("go to shop") || speech.includes("catalog")) {
             setView('store');
             setSelectedProduct(null);
             triggerToast("🎤 Executing Voice Command: Redirected to Machinery Store", "success");
-          } else if (speech.includes("go to cart") || speech.includes("view cart") || speech.includes("open cart") || speech.includes("show cart")) {
+          } else if (speech.includes("go to cart") || speech.includes("view cart") || speech.includes("open cart") || speech.includes("show cart") || speech.includes("cart") || speech.includes("shopping cart")) {
             setView('cart');
             triggerToast("🎤 Executing Voice Command: Opened Shopping Cart", "success");
-          } else if (speech.includes("go to admin") || speech.includes("open admin") || speech.includes("view admin")) {
+          } else if (speech.includes("go to admin") || speech.includes("open admin") || speech.includes("view admin") || speech.includes("admin") || speech.includes("admin panel") || speech.includes("admin page") || speech.includes("control panel")) {
             if (!currentUser || currentUser.role !== 'admin') {
               setCurrentUser(prev => prev ? { ...prev, role: 'admin' } : { email: 'operator@sdazum.com', role: 'admin' });
             }
             setView('admin');
             triggerToast("🎤 Executing Voice Command: Accessing Secure Admin Terminal", "success");
-          } else if (speech.includes("go to chat") || speech.includes("open chat") || speech.includes("ask ai") || speech.includes("view chat")) {
+          } else if (speech.includes("go to chat") || speech.includes("open chat") || speech.includes("ask ai") || speech.includes("view chat") || speech.includes("chat") || speech.includes("gemini") || speech.includes("ask gemini") || speech.includes("gemini ai") || speech.includes("ai") || speech.includes("open gemini") || speech.includes("go to gemini")) {
             setView('chat');
-            triggerToast("🎤 Executing Voice Command: Navigating to AI Assistant", "success");
+            triggerToast("🎤 Executing Voice Command: Navigating to Gemini AI Assistant", "success");
+          } else if (speech.includes("go to stocks") || speech.includes("view stocks") || speech.includes("show stocks") || speech.includes("stock market") || speech.includes("stocks") || speech.includes("stock")) {
+            setView('stocks');
+            triggerToast("🎤 Executing Voice Command: Navigating to Live Stock Market", "success");
+          } else if (speech.includes("go to wishlist") || speech.includes("view wishlist") || speech.includes("show wishlist") || speech.includes("wishlist")) {
+            setView('wishlist');
+            triggerToast("🎤 Executing Voice Command: Navigating to Wishlist", "success");
           } else if (speech.includes("clear cart") || speech.includes("empty cart") || speech.includes("clear shopping cart")) {
             setCart([]);
             localStorage.removeItem('cyberport_cart');
@@ -1692,8 +2327,24 @@ export default function App() {
   // AI voice synthesizer control
   const [isAiVoiceEnabled, setIsAiVoiceEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('cyberport_ai_voice_enabled');
-    return saved !== 'false';
+    return saved === 'true'; // Default to false to prevent automatic speaking when opening the app
   });
+
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>(() => {
+    return localStorage.getItem('cyberport_selected_voice') || '';
+  });
+
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      const updateVoices = () => {
+        setAvailableVoices(window.speechSynthesis.getVoices());
+      };
+      updateVoices();
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('cyberport_ai_voice_enabled', isAiVoiceEnabled ? 'true' : 'false');
@@ -1710,8 +2361,26 @@ export default function App() {
       const isArabic = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(text);
       const isChinese = /[\u4e00-\u9fa5]/.test(text);
       utterance.lang = isArabic ? 'ar-SA' : isChinese ? 'zh-CN' : 'en-US';
+      
+      const voices = window.speechSynthesis.getVoices();
+      if (selectedVoiceName && voices.length > 0) {
+        const found = voices.find(v => v.name === selectedVoiceName);
+        if (found) {
+          utterance.voice = found;
+          utterance.lang = found.lang;
+        }
+      }
       window.speechSynthesis.speak(utterance);
     }
+  };
+
+  const speakGeminiWelcome = () => {
+    setIsAiVoiceEnabled(true);
+    const textToSpeak = 
+      language === 'ar' ? "مرحباً بكم في شاندونغ عزام، شريككم العالمي في مجال الاستيراد والتصدير." :
+      language === 'zh' ? "欢迎来到山东阿扎姆，您的全球进出口公司。" :
+      "Welcome to Shandong Azzam, your global import and export.";
+    speakAiText(textToSpeak);
   };
 
   // Spendings over the last 6 months for the active user
@@ -1973,6 +2642,7 @@ export default function App() {
           `[SUCCESS] Key generation completed successfully at ${new Date().toLocaleTimeString()}!`,
           `[AUTOBOT-DELIVERY] Instant delivery complete! Code unlocked.`
         ]);
+        triggerToast(`🔑 Automated Delivery Key Generated: ${deliveryKey}`, 'success');
         // Update newly placed order from 'Processing' to 'Delivered'
         setOrders(prev => {
           const next = prev.map(o => {
@@ -2015,7 +2685,7 @@ export default function App() {
   const [aiMessages, setAiMessages] = useState<{ sender: 'user' | 'ai'; text: string; date: string }[]>(() => {
     const saved = localStorage.getItem('cyberport_ai_messages');
     return saved ? JSON.parse(saved) : [
-      { sender: 'ai', text: "Welcome to Sdazum Cyberport! I am JARVIS, your highly advanced AI companion. Ask me for recommendations, to open YouTube, or to run diagnostics, Sir.", date: new Date().toLocaleTimeString() }
+      { sender: 'ai', text: "Welcome to Sdazum Cyberport! I am Gemini, your highly advanced AI companion. Ask me for recommendations, to open YouTube, or to run diagnostics, Sir.", date: new Date().toLocaleTimeString() }
     ];
   });
 
@@ -2030,13 +2700,13 @@ export default function App() {
   const [aiCopilotActive, setAiCopilotActive] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // JARVIS Core Intelligent AI States & Refs
+  // GEMINI Core Intelligent AI States & Refs
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isCameraOn, setIsCameraOn] = useState<boolean>(false);
-  const [jarvisTab, setJarvisTab] = useState<'TASKS' | 'SCHEDULE' | 'NETLINK' | 'DESKTOP' | '3D FAB' | 'MANSION'>('TASKS');
-  const [redirectJarvisTab, setRedirectJarvisTab] = useState<string | null>(null);
-  const [jarvisTasks, setJarvisTasks] = useState<{ id: string; text: string; priority: 'HIGH' | 'MEDIUM' | 'LOW'; due?: string; completed: boolean }[]>(() => {
-    const saved = localStorage.getItem('cyberport_jarvis_tasks');
+  const [geminiTab, setGeminiTab] = useState<'TASKS' | 'SCHEDULE' | 'NETLINK' | 'DESKTOP' | '3D FAB' | 'MANSION'>('TASKS');
+  const [redirectGeminiTab, setRedirectGeminiTab] = useState<string | null>(null);
+  const [geminiTasks, setGeminiTasks] = useState<{ id: string; text: string; priority: 'HIGH' | 'MEDIUM' | 'LOW'; due?: string; completed: boolean }[]>(() => {
+    const saved = localStorage.getItem('cyberport_gemini_tasks');
     return saved ? JSON.parse(saved) : [
       { id: '1', text: "Synthesize Badassium element for new reactor core", priority: 'HIGH', due: '2026-07-06', completed: false },
       { id: '2', text: "Refine flight stabilizer software on Mark 85", priority: 'MEDIUM', completed: false },
@@ -2047,17 +2717,17 @@ export default function App() {
   const [newTaskPriority, setNewTaskPriority] = useState<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM');
 
   useEffect(() => {
-    localStorage.setItem('cyberport_jarvis_tasks', JSON.stringify(jarvisTasks));
-  }, [jarvisTasks]);
+    localStorage.setItem('cyberport_gemini_tasks', JSON.stringify(geminiTasks));
+  }, [geminiTasks]);
 
   useEffect(() => {
-    if (currentUser && redirectJarvisTab) {
-      setJarvisTab(redirectJarvisTab as any);
+    if (currentUser && redirectGeminiTab) {
+      setGeminiTab(redirectGeminiTab as any);
       setView('ai');
-      triggerToast(`Welcome back, Sir! Launching requested ${redirectJarvisTab} protocol...`, "success");
-      setRedirectJarvisTab(null);
+      triggerToast(`Welcome back, Sir! Launching requested ${redirectGeminiTab} protocol...`, "success");
+      setRedirectGeminiTab(null);
     }
-  }, [currentUser, redirectJarvisTab]);
+  }, [currentUser, redirectGeminiTab]);
 
   useEffect(() => {
     let activeStream: MediaStream | null = null;
@@ -2070,8 +2740,8 @@ export default function App() {
           }
         })
         .catch((err) => {
-          console.error("Failed to start camera for JARVIS scanner:", err);
-          triggerToast("Failed to start camera for JARVIS: " + err.message, "error");
+          console.error("Failed to start camera for Gemini scanner:", err);
+          triggerToast("Failed to start camera for Gemini: " + err.message, "error");
           setIsCameraOn(false);
         });
     } else {
@@ -2143,24 +2813,12 @@ export default function App() {
   }, [registeredUsers]);
 
   const [chatInputs, setChatInputs] = useState<Record<string, string>>({
-    elena: '',
-    marcus: '',
-    sora: '',
     lounge: '',
   });
   const [chatIsTyping, setChatIsTyping] = useState<boolean>(false);
   
   // Base default static histories
   const defaultHistories: Record<string, { sender: 'user' | 'agent'; text: string; date: string; userName?: string; userAvatar?: string; audioUrl?: string | null; stickerUrl?: string | null; file?: { url: string; name: string; type: string; size: string } | null }[]> = {
-    elena: [
-      { sender: 'agent', text: "Hello! I'm Elena, lead Dispatch & Logistics Engineer here. If you just placed an order and need your automated microservice dispatch license key, or want me to trace your simulation logs, let me know! How can I assist you today?", date: new Date().toLocaleTimeString() }
-    ],
-    marcus: [
-      { sender: 'agent', text: "Hi! I'm Marcus from billing and store operations. I can assist you with credit card payments, refund requests, or switching your account tiers. What's on your mind?", date: new Date().toLocaleTimeString() }
-    ],
-    sora: [
-      { sender: 'agent', text: "Hello! I'm Sora, your industrial machinery expert. I'm ready to help you analyze technical specifications, power/voltage requirements (220V/380V/440V), and load capacities for our CNC, robotic arm, and laser cutter models. Let's build your perfect automation stack!", date: new Date().toLocaleTimeString() }
-    ],
     lounge: []
   };
 
@@ -2169,21 +2827,21 @@ export default function App() {
   const socketRef = useRef<WebSocket | null>(null);
 
   // Chat auto-scroll refs and effects
-  const jarvisChatFeedRef = useRef<HTMLDivElement | null>(null);
+  const geminiChatFeedRef = useRef<HTMLDivElement | null>(null);
   const globalLoungeChatFeedRef = useRef<HTMLDivElement | null>(null);
   const dedicatedChatHubFeedRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (jarvisChatFeedRef.current) {
-      jarvisChatFeedRef.current.scrollTop = jarvisChatFeedRef.current.scrollHeight;
+    if (geminiChatFeedRef.current) {
+      geminiChatFeedRef.current.scrollTop = geminiChatFeedRef.current.scrollHeight;
     }
-  }, [aiMessages, view, jarvisTab]);
+  }, [aiMessages, view, geminiTab]);
 
   useEffect(() => {
     if (globalLoungeChatFeedRef.current) {
       globalLoungeChatFeedRef.current.scrollTop = globalLoungeChatFeedRef.current.scrollHeight;
     }
-  }, [aiMessages, view, jarvisTab]);
+  }, [aiMessages, view, geminiTab]);
 
   useEffect(() => {
     if (dedicatedChatHubFeedRef.current) {
@@ -2231,9 +2889,6 @@ export default function App() {
 
     // Start with default greetings
     const groups: Record<string, any[]> = {
-      elena: [...defaultHistories.elena],
-      marcus: [...defaultHistories.marcus],
-      sora: [...defaultHistories.sora],
       lounge: [...defaultHistories.lounge]
     };
 
@@ -2243,12 +2898,6 @@ export default function App() {
 
       if (rec === 'lounge') {
         groups.lounge.push(msg);
-      } else if (rec === 'elena' || send === 'elena') {
-        groups.elena.push(msg);
-      } else if (rec === 'marcus' || send === 'marcus') {
-        groups.marcus.push(msg);
-      } else if (rec === 'sora' || send === 'sora') {
-        groups.sora.push(msg);
       } else {
         // Private chat between two users!
         const peer = send === userEmail ? rec : send;
@@ -2878,7 +3527,9 @@ export default function App() {
       "https://www.googleapis.com/auth/gmail.compose",
       "https://www.googleapis.com/auth/gmail.modify",
       "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/drive.file",
+      "https://www.googleapis.com/auth/drive.metadata.readonly"
     ];
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + 
       `client_id=${googleClientId}&` +
@@ -3021,6 +3672,8 @@ export default function App() {
     } else {
       setCart([...cart, { product, quantity: qty, selectedSize: size, selectedColor: color, customName }]);
     }
+    setCartBadgePulse(true);
+    setTimeout(() => setCartBadgePulse(false), 800);
     const label = customName ? `${product.name} (Custom: "${customName}")` : product.name;
     triggerToast(`Added ${qty}x ${label} to your cart.`, 'success');
   };
@@ -3041,11 +3694,16 @@ export default function App() {
 
     // Deduct cost from wallet
     setWalletBalance(prev => prev - cost);
-    triggerToast(`Purchased ${product.name} successfully using Cyber Wallet!`, "success");
+    
+    // Generate order ID early to include in the toast notification
+    const orderId = `ord-${Math.floor(Math.random() * 90000) + 10000}`;
+    const etaHours = Math.floor(Math.random() * 18) + 18; // ETA of 18-36 hours for industrial machinery
+    
+    triggerToast(`💳 Wallet Payment Processed! Order ID: ${orderId} | Delivery ETA: ${etaHours} Hours. Dispatching machinery immediately.`, "success");
 
     // Push new simulated order
     const mockOrder: Order = {
-      id: `ord-${Math.floor(Math.random() * 90000) + 10000}`,
+      id: orderId,
       total: cost,
       status: 'Processing',
       date: new Date().toLocaleDateString(),
@@ -3560,11 +4218,11 @@ export default function App() {
             }
           } else if (isGreeting) {
             if (detectedLang === 'ar') {
-              aiText = "مرحباً بك يا سيدي! أهلاً بك في نظام الذكاء الاصطناعي المتقدم JARVIS. كيف يمكنني مساعدتك في العثور على الماكينات والقطع المثالية اليوم؟";
+              aiText = "مرحباً بك يا سيدي! أهلاً بك في نظام الذكاء الاصطناعي المتقدم Gemini. كيف يمكنني مساعدتك في العثور على الماكينات والقطع المثالية اليوم؟";
             } else if (detectedLang === 'zh') {
-              aiText = "您好，先生！欢迎使用 JARVIS 高级人工智能系统。今天有什么我可以帮您挑选或咨询的工业设备与零件吗？";
+              aiText = "您好，先生！欢迎使用 Gemini 高级人工智能系统。今天有什么我可以帮您挑选或咨询的工业设备与零件吗？";
             } else {
-              aiText = "Hello, Sir! I am JARVIS, your advanced AI assistant. How can I assist you in discovering the perfect industrial machinery and custom sports parts today?";
+              aiText = "Hello, Sir! I am Gemini, your advanced AI assistant. How can I assist you in discovering the perfect industrial machinery and custom sports parts today?";
             }
           } else {
             if (detectedLang === 'ar') {
@@ -3872,6 +4530,9 @@ export default function App() {
                   type="text"
                   placeholder={t.searchPlaceholder}
                   value={searchTerm}
+                  onFocus={() => {
+                    // Silent focus to keep the experience professional and avoid intrusive speech on focus
+                  }}
                   onChange={(e) => {
                     const val = e.target.value;
                     
@@ -3912,7 +4573,7 @@ export default function App() {
                       }
                     }
                   }}
-                  className={`w-full text-xs rounded-full pl-9 pr-24 py-2 outline-none transition-all ${
+                  className={`w-full text-xs rounded-full pl-9 pr-24 py-2 outline-none transition-all duration-300 transform focus:scale-[1.03] focus:shadow-[0_0_15px_rgba(99,102,241,0.2)] ${
                     theme === 'day' 
                       ? 'bg-slate-100 border border-slate-200 text-slate-800 focus:border-slate-800' 
                       : theme === 'night'
@@ -3921,6 +4582,23 @@ export default function App() {
                   }`}
                 />
                 <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                  {searchTerm && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchTerm('');
+                        triggerToast("Search cleared", "success");
+                      }}
+                      className={`p-1 rounded-full transition-colors cursor-pointer mr-0.5 ${
+                        theme === 'day' 
+                          ? 'text-slate-400 hover:text-slate-800 hover:bg-slate-200' 
+                          : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+                      }`}
+                      title="Clear search text"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                   {speechActive && (
                     <span className="flex h-2 w-2 relative">
                       <span className={`animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 ${isListening ? '' : 'hidden'}`}></span>
@@ -4065,6 +4743,30 @@ export default function App() {
             </button>
           </div>
 
+          {/* Currency Toggle Widget */}
+          <div className="flex items-center gap-0.5 border border-slate-700/30 rounded-xl p-0.5 bg-slate-950/25" id="currency-toggle-widget">
+            {(['USD', 'EUR', 'GBP'] as const).map((curr) => (
+              <button
+                key={curr}
+                onClick={() => {
+                  setCurrency(curr);
+                  logUserActivity('theme', 'Currency Switched', `Switched prices to ${curr}.`);
+                  triggerToast(`Currency switched to ${curr}`, "success");
+                }}
+                className={`px-2 py-1 rounded-lg text-[10px] font-black font-mono transition-all cursor-pointer ${
+                  currency === curr
+                    ? theme === 'cyberpunk'
+                      ? 'bg-pink-500 text-[#00f0ff] shadow-[0_0_8px_rgba(236,72,153,0.4)]'
+                      : 'bg-indigo-600 text-white'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
+                }`}
+                title={`Switch prices to ${curr}`}
+              >
+                {curr}
+              </button>
+            ))}
+          </div>
+
 
           {/* User Sign Up / Upload trigger */}
           {currentUser ? (
@@ -4125,7 +4827,11 @@ export default function App() {
           }`} title={t.cart}>
             <ShoppingBag className="w-5 h-5" />
             {cart.length > 0 && (
-              <span id="cart-badge" className={`absolute top-1 right-1 text-white font-bold text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center border animate-bounce ${
+              <span id="cart-badge" className={`absolute top-1 right-1 text-white font-bold text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                cartBadgePulse 
+                  ? 'scale-150 animate-pulse shadow-[0_0_15px_#ff007f] ring-2 ring-[#ff007f]' 
+                  : 'animate-bounce'
+              } ${
                 theme === 'cyberpunk' ? 'bg-pink-500 border-black' : 'bg-slate-900 border-white'
               }`}>
                 {cart.reduce((s, i) => s + i.quantity, 0)}
@@ -4312,28 +5018,6 @@ export default function App() {
 
         {currentUser && (
           <button
-            onClick={() => setView('ai')}
-            className={`px-3.5 py-2 rounded-xl font-mono text-[10px] font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer active:scale-95 duration-150 relative ${
-              view === 'ai'
-                ? theme === 'cyberpunk'
-                  ? 'bg-[#00f0ff] text-black shadow-[0_0_15px_rgba(0,240,255,0.8)] scale-102'
-                  : theme === 'night'
-                    ? 'bg-indigo-600 text-white shadow-[0_0_12px_rgba(79,70,229,0.7)] border border-indigo-500 scale-102'
-                    : 'bg-indigo-600 text-white shadow-[0_0_8px_rgba(79,70,229,0.4)] scale-102'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/30'
-            }`}
-          >
-            <img src={jarvisHelmet} className="w-[26px] h-[26px] rounded-full border border-teal-400/30 object-cover" referrerPolicy="no-referrer" />
-            <span>Jarvis AI</span>
-            <span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-          </button>
-        )}
-
-        {currentUser && (
-          <button
             onClick={() => setView('chat')}
             className={`px-3.5 py-2 rounded-xl font-mono text-[10px] font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer active:scale-95 duration-150 relative ${
               view === 'chat'
@@ -4402,10 +5086,45 @@ export default function App() {
           <TrendingUp className="w-3.5 h-3.5 text-[#00f0ff]" />
           <span>Orders Tracker</span>
         </button>
+
+        {isMohab && (
+          <button
+            onClick={() => setView('stocks')}
+            className={`px-3.5 py-2 rounded-xl font-mono text-[10px] font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer active:scale-95 duration-150 ${
+              view === 'stocks'
+                ? theme === 'cyberpunk'
+                  ? 'bg-amber-500 text-black shadow-[0_0_15px_rgba(245,158,11,0.8)] scale-102'
+                  : theme === 'night'
+                    ? 'bg-amber-600 text-white shadow-[0_0_12px_rgba(245,158,11,0.7)] border border-amber-500 scale-102'
+                    : 'bg-amber-600 text-white shadow-[0_0_8px_rgba(245,158,11,0.4)] scale-102'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/30'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
+            <span>Stock Market</span>
+          </button>
+        )}
       </div>
 
       {/* VIEW ROUTING SECTIONS */}
       <main className="flex-1 relative">
+
+        {/* MACHINERY STOCK MARKET VIEW */}
+        {view === 'stocks' && (
+          <motion.div
+            id="stocks-page"
+            className="max-w-7xl mx-auto px-4 py-8 pb-20"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          >
+            <StockMarketView 
+              theme={theme} 
+              language={language} 
+              speakAiText={speakAiText} 
+            />
+          </motion.div>
+        )}
 
         {/* WISHLIST VIEW */}
         {view === 'wishlist' && (
@@ -4484,17 +5203,17 @@ export default function App() {
                         </div>
 
                         {/* Product image with fallbacks */}
-                        <div className="relative w-full h-60 overflow-hidden rounded-2xl mb-4 cursor-pointer group [transform-style:preserve-3d]">
-                          <div className="parallax-img w-full h-full transition-transform duration-300 [transform-style:preserve-3d]">
+                        <div className="relative w-full h-60 overflow-hidden rounded-2xl mb-4 cursor-pointer group">
+                          <div className="parallax-img w-full h-full">
                             {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
                               <img
                                 src={p.image}
                                 alt={p.name}
-                                className="w-full h-full object-cover [transform:translateZ(30px)]"
+                                className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
                               />
                             ) : (
-                              <div className="w-full h-full bg-slate-900/60 flex items-center justify-center rounded-2xl [transform:translateZ(30px)]">
+                              <div className="w-full h-full bg-slate-900/60 flex items-center justify-center rounded-2xl">
                                 <ProductSVG type={p.image} color={p.colors[0]?.value || '#94A3B8'} className="w-28 h-28" />
                               </div>
                             )}
@@ -4516,7 +5235,7 @@ export default function App() {
 
                         {/* Price and buttons */}
                         <div className="flex items-center justify-between pt-4 border-t border-slate-800/40 mt-4">
-                          <p className="font-mono font-black text-md text-[#00f0ff]">${p.price.toFixed(2)}</p>
+                          <p className="font-mono font-black text-md text-[#00f0ff]">{formatPrice(p.price)}</p>
                           <div className="flex gap-1.5">
                             <button className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600 rounded-lg text-[#00f0ff] hover:text-white transition-colors cursor-pointer text-xs font-bold">
                               Details
@@ -4596,8 +5315,10 @@ export default function App() {
                       onClick={() => setIsAiOpen(true)}
                       className="px-6 py-3 bg-[#00f0ff]/10 hover:bg-[#00f0ff]/20 text-[#00f0ff] border border-[#00f0ff]/40 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-2"
                     >
-                      <img src={jarvisHelmet} className="w-4 h-4 rounded-full border border-[#00f0ff]/30 object-cover" referrerPolicy="no-referrer" />
-                      <span>Ask Store AI</span>
+                      <svg className="w-4 h-4 text-[#00f0ff] animate-pulse shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="currentColor"/>
+                      </svg>
+                      <span>Ask Gemini AI</span>
                     </button>
                   </div>
                 </div>
@@ -4635,9 +5356,9 @@ export default function App() {
               </div>
             </motion.section>
 
-            {/* JARVIS INTERACTIVE SYSTEM LABS */}
+            {/* GEMINI INTERACTIVE SYSTEM LABS */}
             <motion.section 
-              id="jarvis-system-labs" 
+              id="gemini-system-labs" 
               className="max-w-7xl mx-auto px-4 space-y-4"
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -4653,8 +5374,17 @@ export default function App() {
                         ? 'text-slate-900' 
                         : 'text-slate-100'
                   }`}>
-                    <img src={jarvisHelmet} className="w-5 h-5 rounded-md border border-teal-400/30 object-cover" referrerPolicy="no-referrer" />
-                    <span>Jarvis Cognitive Matrix System Labs</span>
+                    <svg className="w-5 h-5 animate-pulse shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#geminiLabsGradient)" />
+                      <defs>
+                        <linearGradient id="geminiLabsGradient" x1="3" y1="2" x2="21" y2="20" gradientUnits="userSpaceOnUse">
+                          <stop offset="0%" stopColor="#4e82f7" />
+                          <stop offset="50%" stopColor="#9b51e0" />
+                          <stop offset="100%" stopColor="#e25c84" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <span className="bg-linear-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">Gemini Intelligence System Labs</span>
                   </h3>
                   <p className="text-[10px] text-slate-500 font-mono mt-0.5 uppercase">Direct satellite uplink to local mansion sub-modules // active authorization required</p>
                 </div>
@@ -4733,12 +5463,12 @@ export default function App() {
                       onClick={() => {
                         if (!currentUser) {
                           triggerToast("Access Denied: Please authorize your operator account first.", "error");
-                          setRedirectJarvisTab(app.id);
+                          setRedirectGeminiTab(app.id);
                           setAuthIsSignUp(false);
                           setView('auth');
                           return;
                         }
-                        setJarvisTab(app.id as any);
+                        setGeminiTab(app.id as any);
                         setView('ai');
                         triggerToast(`Establishing secure handshake with ${app.name} protocol...`, "success");
                       }}
@@ -4820,13 +5550,20 @@ export default function App() {
                   onMouseMove={handleCategoriesMouseMove}
                   onScroll={handleCategoriesScrollEvent}
                 >
-                  {CATEGORIES.map((cat) => {
+                  {storefrontCategories.map((cat) => {
                     const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
+                    const isDraggingThis = draggedCategory === cat;
                     return (
                       <button
                         key={cat}
+                        draggable
+                        onDragStart={(e) => handleCategoryDragStart(e, cat)}
+                        onDragOver={handleCategoryDragOver}
+                        onDrop={(e) => handleCategoryDrop(e, cat)}
                         onClick={() => setActiveCategory(cat)}
-                        className={`px-5 py-2.5 text-xs font-bold rounded-xl border transition-all cursor-pointer uppercase shrink-0 ${
+                        className={`px-5 py-2.5 text-xs font-bold rounded-xl border transition-all cursor-grab active:cursor-grabbing uppercase shrink-0 ${
+                          isDraggingThis ? 'opacity-30 border-dashed border-indigo-500 bg-indigo-500/10' : ''
+                        } ${
                           isActive
                             ? theme === 'cyberpunk'
                               ? 'bg-pink-500 border-pink-500 text-white shadow-lg glow-pink'
@@ -4978,6 +5715,31 @@ export default function App() {
                     <CheckSquare className="w-3.5 h-3.5 text-indigo-400" />
                     <span>{allFilteredSelected ? 'Deselect All Visible' : 'Select All Visible'}</span>
                   </button>
+
+                  {/* Show Price Trend Toggle Checkbox */}
+                  <label className={`px-3 py-2 text-xs font-bold font-sans uppercase rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 select-none ${
+                    theme === 'day'
+                      ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                  }`}>
+                    <input 
+                      type="checkbox"
+                      checked={products.length > 0 && products.every(p => priceHistoryActive[p.id])}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        const updated: Record<string, boolean> = {};
+                        if (checked) {
+                          products.forEach(p => {
+                            updated[p.id] = true;
+                          });
+                        }
+                        setPriceHistoryActive(updated);
+                        triggerToast(checked ? "Price trend sparklines enabled." : "Price trend sparklines disabled.", "success");
+                      }}
+                      className="accent-indigo-500 w-3.5 h-3.5 rounded cursor-pointer"
+                    />
+                    <span>Show Price Trend</span>
+                  </label>
 
                   <button
                     onClick={handleResetCatalog}
@@ -5149,7 +5911,9 @@ export default function App() {
                 )}
               </AnimatePresence>
 
-              {filteredProducts.length === 0 ? (
+              {!productsLoaded ? (
+                renderProductSkeleton()
+              ) : filteredProducts.length === 0 ? (
                 <div className={`text-center py-16 px-6 rounded-3xl border ${
                   theme === 'day' 
                     ? 'bg-slate-50 border-slate-200 text-slate-500' 
@@ -5207,13 +5971,47 @@ export default function App() {
                   animate="show"
                   className="grid grid-cols-[repeat(auto-fit,minmax(270px,1fr))] gap-6"
                 >
-                  {filteredProducts.map((p) => {
-                    const commentsCount = (reviewsDB[p.id] || p.reviews || []).length;
-                    return (
+                  {isSyncingCatalog ? (
+                    Array.from({ length: 6 }).map((_, idx) => (
+                      <div
+                        key={`skeleton-${idx}`}
+                        className={`rounded-3xl p-5 border relative flex flex-col justify-between h-[420px] animate-pulse ${
+                          theme === 'day'
+                            ? 'bg-slate-50 border-slate-200'
+                            : theme === 'night'
+                              ? 'bg-slate-900 border-slate-800'
+                              : 'bg-slate-950/80 border-pink-500/20 shadow-xl'
+                        }`}
+                      >
+                        {/* Image skeleton */}
+                        <div className="relative w-full h-60 rounded-2xl mb-4 bg-slate-800/40 flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full bg-slate-800/30 animate-pulse" />
+                        </div>
+
+                        {/* Title and Badge skeletons */}
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <div className="w-1/3 h-3.5 bg-slate-800/50 rounded" />
+                            <div className="w-1/4 h-3 bg-slate-800/30 rounded" />
+                          </div>
+                          <div className="w-2/3 h-5 bg-slate-800/60 rounded" />
+                          <div className="w-full h-3 bg-slate-800/30 rounded" />
+                        </div>
+
+                        {/* Button and price skeletons */}
+                        <div className="flex justify-between items-center mt-4 pt-3 border-t border-slate-800/30">
+                          <div className="w-1/4 h-6 bg-slate-800/50 rounded" />
+                          <div className="w-1/3 h-8 bg-slate-800/60 rounded-xl" />
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    filteredProducts.map((p) => {
+                      const commentsCount = (reviewsDB[p.id] || p.reviews || []).length;
+                      return (
                       <motion.div
                         id="product-card-container"
                         key={p.id}
-                        layoutId={`card-container-${p.id}`}
                         variants={{
                           hidden: { opacity: 0, y: 30 },
                           show: { 
@@ -5226,6 +6024,7 @@ export default function App() {
                             }
                           }
                         }}
+                        whileHover={{ y: -8, scale: 1.015 }}
                         draggable={isMohab}
                         onDragStart={(e) => {
                           if (!isMohab) return;
@@ -5247,7 +6046,7 @@ export default function App() {
                         }}
                         onDragEnd={() => setDraggedId(null)}
                         layout
-                        className={`transition-all duration-300 rounded-3xl ${
+                        className={`transition-all duration-300 rounded-3xl group ${
                           draggedId === p.id 
                             ? 'opacity-40 scale-95 border-dashed border-[#00f0ff]' 
                             : ''
@@ -5295,6 +6094,28 @@ export default function App() {
                             <Heart className={`w-3.5 h-3.5 ${wishlist.includes(p.id) ? 'fill-rose-500 text-rose-500' : 'text-slate-400'}`} />
                           </button>
 
+                          {/* Compare toggle button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleCompare(p.id);
+                            }}
+                            className={`absolute top-14 left-4 z-20 p-2 rounded-full border transition-all cursor-pointer flex items-center justify-center shadow-lg ${
+                              compareProductIds.includes(p.id)
+                                ? theme === 'cyberpunk'
+                                  ? 'bg-pink-600 border-pink-500 text-white shadow-[0_0_12px_rgba(236,72,153,0.5)] scale-110'
+                                  : 'bg-indigo-600 border-indigo-500 text-white shadow-[0_0_12px_rgba(79,70,229,0.5)] scale-110'
+                                : 'bg-black/70 border-slate-800 text-slate-400 hover:border-indigo-500 hover:text-indigo-400 hover:scale-110 active:scale-90'
+                            }`}
+                            title={
+                              compareProductIds.includes(p.id)
+                                ? "Remove from Compare"
+                                : "Add to Compare"
+                            }
+                          >
+                            <Layers className="w-3.5 h-3.5" />
+                          </button>
+
 
 
                           {/* Bulk select checkmark */}
@@ -5331,25 +6152,25 @@ export default function App() {
 
                           {/* Product image with fallbacks and subtle zoom transition on hover */}
                           <div 
-                            className="relative w-full h-60 overflow-hidden rounded-2xl mb-4 cursor-pointer group/img [transform-style:preserve-3d]"
+                            className="relative w-full h-60 overflow-hidden rounded-2xl mb-4 cursor-pointer group/img"
                           >
-                            <div className="parallax-img w-full h-full transition-transform duration-700 ease-out [transform-style:preserve-3d]">
+                            <div className="parallax-img w-full h-full">
                               {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
                                 <LazyImage
                                   src={p.image}
                                   alt={p.name}
-                                  className="w-full h-full object-cover rounded-2xl [transform:translateZ(30px)]"
+                                  className="w-full h-full object-cover rounded-2xl"
                                   referrerPolicy="no-referrer"
                                 />
                               ) : (
-                                <div className="w-full h-full bg-slate-900/60 flex items-center justify-center rounded-2xl [transform:translateZ(30px)]">
+                                <div className="w-full h-full bg-slate-900/60 flex items-center justify-center rounded-2xl">
                                   <ProductSVG type={p.image} color={p.colors?.[0]?.value || '#94A3B8'} className="w-28 h-28" />
                                 </div>
                               )}
                             </div>
 
                             {/* D3 Sparkline Overlay */}
-                            {priceHistoryActive[p.id] && (
+                            {(priceHistoryActive[p.id] || globalPriceSparklinesVisible) && (
                               <PriceSparkline
                                 basePrice={p.price}
                                 productId={p.id}
@@ -5528,11 +6349,12 @@ export default function App() {
                             {stockHistoryActive[p.id] && (
                               <StockHistoryChart productId={p.id} theme={theme} />
                             )}
+                            {/* Stock level visual progress indicator deleted based on user directive */}
                           </div>
 
                           {/* Price and buttons */}
                           <div className="flex items-center justify-between pt-4 border-t border-slate-800/40 mt-4">
-                            <p className="font-mono font-black text-md text-[#00f0ff]">${p.price.toFixed(2)}</p>
+                            <p className="font-mono font-black text-md text-[#00f0ff]">{formatPrice(p.price)}</p>
                             
                             <div className="flex gap-1.5 flex-wrap justify-end">
 
@@ -5561,29 +6383,38 @@ export default function App() {
                                 <QrCode className="w-3.5 h-3.5 text-pink-500" />
                               </button>
 
-                              {/* Quick Add Button */}
-                              <button
-                                id={`quick-add-${p.id}`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  const defaultSize = p.sizes?.[0] || 'Standard';
-                                  const defaultColor = p.colors?.[0] || { name: 'Industrial Gray', value: '#64748B' };
-                                  handleAddToCart(p, 1, defaultSize, defaultColor);
-                                }}
-                                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all hover:scale-102 active:scale-95 cursor-pointer text-xs font-black flex items-center gap-1 shrink-0"
-                                title="Quick Add"
-                              >
-                                <Plus className="w-3 h-3 text-emerald-100" />
-                                <span>Quick Add</span>
-                              </button>
+                              {/* Quick Add Button with hover tooltip */}
+                              <div className="relative group/qa shrink-0 z-30">
+                                <button
+                                  id={`quick-add-${p.id}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const defaultSize = p.sizes?.[0] || 'Standard';
+                                    const defaultColor = p.colors?.[0] || { name: 'Industrial Gray', value: '#64748B' };
+                                    handleAddToCart(p, 1, defaultSize, defaultColor);
+                                  }}
+                                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all hover:scale-102 active:scale-95 cursor-pointer text-xs font-black flex items-center gap-1 shrink-0"
+                                  title="Quick Add"
+                                >
+                                  <Plus className="w-3 h-3 text-emerald-100" />
+                                  <span>Quick Add</span>
+                                </button>
+                                
+                                {/* Tooltip */}
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-950 border border-slate-800 text-white rounded-lg text-[10px] font-mono shadow-2xl scale-0 group-hover/qa:scale-100 transition-all origin-bottom pointer-events-none z-50 whitespace-nowrap flex flex-col gap-0.5">
+                                  <span className="text-emerald-400 font-bold">Price: ${p.price.toFixed(2)}</span>
+                                  <span className={p.stock !== undefined && p.stock < 15 ? "text-rose-400 font-bold animate-pulse" : "text-slate-300"}>
+                                    Stock: {p.stock !== undefined ? `${p.stock} units` : 'In Stock'}
+                                  </span>
+                                </div>
+                              </div>
 
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setSelectedProduct(p);
-                                  setView('product-details');
+                                  handleProductCardClick(p);
                                 }}
-                                className="px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600 rounded-lg text-[#00f0ff] hover:text-white transition-colors cursor-pointer text-xs font-bold"
+                                className="transition-all duration-300 px-4 py-2 bg-indigo-600/20 hover:bg-indigo-600 rounded-lg text-[#00f0ff] hover:text-white cursor-pointer text-xs font-bold"
                                 title="View reviews & details"
                               >
                                 Details
@@ -5603,7 +6434,7 @@ export default function App() {
                         </ParallaxCard>
                       </motion.div>
                     );
-                  })}
+                  }))}
                 </motion.div>
               )}
             </motion.section>
@@ -5719,7 +6550,7 @@ export default function App() {
                 </div>
 
                 <p id="details-price" className="text-3xl font-black text-pink-400 font-mono">
-                  ${selectedProduct.price.toFixed(2)}
+                  {formatPrice(selectedProduct.price)}
                 </p>
 
                 <p id="details-description" className={`text-xs leading-relaxed font-sans ${theme === 'day' ? 'text-slate-950 font-normal' : 'text-slate-300'}`}>
@@ -5750,6 +6581,117 @@ export default function App() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.94.725l.548 2.2a1 1 0 01-.321.988l-1.305.98a10.582 10.582 0 004.872 4.872l.98-1.305a1 1 0 01.988-.321l2.2.548a1 1 0 01.725.94V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                       </svg>
                     </div>
+                  </div>
+
+                  {/* Set Price Alert Feature */}
+                  <div className={`p-4 rounded-2xl border transition-all ${
+                    theme === 'cyberpunk'
+                      ? 'bg-slate-900/40 border-[#00f0ff]/20 text-slate-100'
+                      : theme === 'day'
+                        ? 'bg-slate-50 border-slate-200 text-slate-800'
+                        : 'bg-slate-950/40 border-slate-800 text-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <Bell className="w-4 h-4 text-pink-500" />
+                      <span className="text-xs font-black font-mono uppercase tracking-wider">
+                        🔔 Price Alert Threshold
+                      </span>
+                    </div>
+
+                    {activeAlert ? (
+                      <div className="space-y-2">
+                        <p className="text-[11px] text-slate-400">
+                          Active alert set for <span className="text-[#00f0ff] font-bold font-mono">${activeAlert.targetPrice}</span>. We will notify you at <span className="text-pink-400 font-bold">{activeAlert.email}</span>.
+                        </p>
+                        <button
+                          onClick={() => {
+                            const savedAlerts = localStorage.getItem('sdazum_price_alerts');
+                            if (savedAlerts) {
+                              try {
+                                const alerts = JSON.parse(savedAlerts);
+                                delete alerts[selectedProduct.id];
+                                localStorage.setItem('sdazum_price_alerts', JSON.stringify(alerts));
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            }
+                            setActiveAlert(null);
+                            setAlertTargetPrice('');
+                            triggerToast("Price alert cancelled successfully.", "success");
+                          }}
+                          className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-400 border border-rose-500/20 text-[10px] font-bold font-mono rounded-lg cursor-pointer transition-colors"
+                        >
+                          Remove Alert
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <p className="text-[10px] text-slate-400 leading-normal">
+                          Want to wait for a discount? Enter your target price and email. We will trigger a mock email notification when the price drops to or below your target.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                          <div>
+                            <label className="block text-[9px] uppercase font-mono font-bold text-slate-500 mb-1">Target Price ($)</label>
+                            <input
+                              type="number"
+                              placeholder={`e.g. ${Math.round(selectedProduct.price * 0.9)}`}
+                              value={alertTargetPrice}
+                              onChange={(e) => setAlertTargetPrice(e.target.value)}
+                              className={`w-full p-2 text-xs rounded-lg border outline-none font-mono ${
+                                theme === 'day'
+                                  ? 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'
+                                  : 'bg-slate-900 border-slate-850 text-slate-100 focus:border-pink-500'
+                              }`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] uppercase font-mono font-bold text-slate-500 mb-1">Email Address</label>
+                            <input
+                              type="email"
+                              placeholder="you@example.com"
+                              value={alertEmail}
+                              onChange={(e) => setAlertEmail(e.target.value)}
+                              className={`w-full p-2 text-xs rounded-lg border outline-none font-sans ${
+                                theme === 'day'
+                                  ? 'bg-white border-slate-200 text-slate-800 focus:border-indigo-500'
+                                  : 'bg-slate-900 border-slate-850 text-slate-100 focus:border-pink-500'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const target = parseFloat(alertTargetPrice);
+                            if (isNaN(target) || target <= 0) {
+                              triggerToast("Please enter a valid target price greater than 0", "error");
+                              return;
+                            }
+                            if (!alertEmail.trim() || !alertEmail.includes('@')) {
+                              triggerToast("Please enter a valid email address", "error");
+                              return;
+                            }
+                            
+                            const savedAlerts = localStorage.getItem('sdazum_price_alerts') || '{}';
+                            try {
+                              const alerts = JSON.parse(savedAlerts);
+                              alerts[selectedProduct.id] = {
+                                targetPrice: target,
+                                email: alertEmail.trim(),
+                                triggered: false,
+                              };
+                              localStorage.setItem('sdazum_price_alerts', JSON.stringify(alerts));
+                              setActiveAlert({ targetPrice: target, email: alertEmail.trim() });
+                              triggerToast(`Price alert registered successfully at $${target}!`, "success");
+                            } catch (e) {
+                              console.error(e);
+                            }
+                          }}
+                          className="w-full py-2 bg-pink-600 hover:bg-pink-500 text-white text-[11px] font-black uppercase font-mono rounded-lg transition-colors cursor-pointer"
+                        >
+                          🔔 Register Price Alert
+                        </button>
+                      </div>
+                    )}
                   </div>
 
 
@@ -5944,6 +6886,9 @@ export default function App() {
               googleUser={googleUser}
               onConnectGmail={handleConnectGmail}
               currentUser={currentUser}
+              language={language}
+              formatPrice={formatPrice}
+              onContinueShopping={() => setView('store')}
               onUpdateQuantity={(idx, newQty) => {
                 const updated = [...cart];
                 updated[idx].quantity = newQty;
@@ -5957,6 +6902,9 @@ export default function App() {
               onClearCart={() => setCart([])}
               onOrderPlaced={(newOrder) => {
                 const processingOrder = { ...newOrder, status: 'Processing' as const };
+                const orderId = processingOrder.id;
+                const etaHours = Math.floor(Math.random() * 18) + 18;
+
                 setOrders(prev => {
                   const next = [processingOrder, ...prev];
                   if (currentUser && currentUser.email !== 'mohabmohnad9@gmail.com' && currentUser.email !== 'lamadevtest@gmail.com') {
@@ -5969,9 +6917,9 @@ export default function App() {
                 // Apply wallet deduction of checkout total
                 if (walletBalance >= newOrder.total) {
                   setWalletBalance(prev => prev - newOrder.total);
-                  triggerToast("Order authorized successfully using Wallet system!", "success");
+                  triggerToast(`💳 Wallet Payment Processed! Order ID: ${orderId} | Delivery ETA: ${etaHours} Hours. Dispatching machinery immediately.`, "success");
                 } else {
-                  triggerToast("Charged via Credit Card successfully!", "success");
+                  triggerToast(`💳 Credit Card Charged! Order ID: ${orderId} | Delivery ETA: ${etaHours} Hours. Dispatching machinery immediately.`, "success");
                 }
 
                 // Run digital dispatch for orders with digital items with dynamic countdown timer
@@ -5990,7 +6938,6 @@ export default function App() {
                 // Send Real Gmail notification
                 sendRealGmailNotification(processingOrder, generatedKey);
               }}
-              language={language}
             />
           </motion.div>
         )}
@@ -6230,17 +7177,41 @@ export default function App() {
                                       ${o.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </td>
                                     <td className="py-4 px-4">
-                                      {currentStatus === 'Processing' ? (
-                                        <span className="bg-amber-950/80 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-[0_0_8px_rgba(245,158,11,0.3)]">
-                                          <span className="w-1.5 h-1.5 bg-amber-400 rounded-full inline-block animate-pulse"></span>
-                                          <span>Processing</span>
-                                        </span>
-                                      ) : (
-                                        <span className="bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 shadow-[0_0_8px_rgba(16,185,129,0.3)]">
-                                          <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full inline-block animate-pulse"></span>
-                                          <span>Delivered</span>
-                                        </span>
-                                      )}
+                                      <AnimatePresence mode="wait">
+                                        <motion.span
+                                          key={currentStatus}
+                                          initial={{ scale: 0.8, opacity: 0, filter: "hue-rotate(-45deg)" }}
+                                          animate={{ 
+                                            scale: [1, 1.15, 1], 
+                                            opacity: 1, 
+                                            filter: "hue-rotate(0deg)" 
+                                          }}
+                                          exit={{ scale: 0.8, opacity: 0 }}
+                                          transition={{ 
+                                            duration: 0.5, 
+                                            ease: "easeInOut"
+                                          }}
+                                          className="inline-block"
+                                        >
+                                          {currentStatus === 'Processing' ? (
+                                            <span className="bg-amber-950/80 text-amber-400 border border-amber-500/50 px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-2 shadow-[0_0_12px_rgba(245,158,11,0.4)] transition-all duration-300">
+                                              <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500 shadow-[0_0_8px_#f59e0b]"></span>
+                                              </span>
+                                              <span className="animate-pulse">Processing</span>
+                                            </span>
+                                          ) : (
+                                            <span className="bg-emerald-950/80 text-emerald-400 border border-emerald-500/50 px-3 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-wider inline-flex items-center gap-2 shadow-[0_0_12px_rgba(16,185,129,0.4)] transition-all duration-300">
+                                              <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shadow-[0_0_8px_#10b981]"></span>
+                                              </span>
+                                              <span className="animate-pulse">Delivered</span>
+                                            </span>
+                                          )}
+                                        </motion.span>
+                                      </AnimatePresence>
                                     </td>
                                   </tr>
                                   
@@ -6319,11 +7290,18 @@ export default function App() {
                                             </div>
                                           </div>
 
+                                          {/* Machinery Geolocation Tracker */}
+                                          <MachineryGeolocationTracker 
+                                            orderId={o.id} 
+                                            theme={theme} 
+                                            machineryName={o.products[0]?.name || 'Industrial Heavy Duty Machinery'} 
+                                          />
+
                                           {/* Shipping log console output terminal lines */}
                                           <div className="bg-black/80 rounded-2xl p-4 border border-slate-900 font-mono text-[9px] text-slate-400 leading-relaxed space-y-1">
                                             <p className="text-emerald-500/80">[SYSTEM] :: PAYMENT DETECTED - SECURE LUHN VERIFICATION COMPLETED</p>
                                             <p className="text-emerald-500/80">[SYSTEM] :: MANUFACTURING ASSIGNED TO CNC ROBOTIC GRID SHANDONG-4</p>
-                                            <p className="text-pink-500/80">[SYSTEM] :: CUSTOM ENGRAVING ACTIVE: "${o.products[0]?.customName || 'STANDARD AZUM DESIGN'}" IN PROCESS</p>
+                                            <p className="text-pink-500/80">[SYSTEM] :: CUSTOM ENGRAVING ACTIVE: "{o.products[0]?.customName || 'STANDARD AZUM DESIGN'}" IN PROCESS</p>
                                             <p className="text-slate-500">[PENDING] :: CARRIER FLIGHT ASSIGNMENT IN PROCESS (SD-781 AIRLINE COOP)</p>
                                           </div>
                                         </div>
@@ -6339,319 +7317,1286 @@ export default function App() {
                     </div>
                   )}
                 </>
-              );
-            })()}
-          </motion.div>
-        )}
+               );
+             })()}
+           </motion.div>
+         )}
 
-        {/* 6. CLERK AUTHENTICATOR */}
-        {view === 'auth' && (
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-          >
-            <ClerkAuth
-              onSuccess={handleAuthSuccess}
-              onClose={() => setView('store')}
-              onGoogleAuth={handleConnectGmail}
-              initialIsSignUp={authIsSignUp}
-              language={language}
-              theme={theme}
-            />
-          </motion.div>
-        )}
+         {/* 6. CLERK AUTHENTICATOR */}
+         {view === 'auth' && (
+           <motion.div
+             initial={{ opacity: 0, y: 30 }}
+             animate={{ opacity: 1, y: 0 }}
+             transition={{ duration: 0.5, ease: "easeOut" }}
+           >
+             <ClerkAuth
+               onSuccess={handleAuthSuccess}
+               onClose={() => setView('store')}
+               onGoogleAuth={handleConnectGmail}
+               initialIsSignUp={authIsSignUp}
+               language={language}
+               theme={theme}
+             />
+           </motion.div>
+         )}
 
-        {/* 7. ADMINISTRATIVE DASHBOARD PORTAL */}
-        {view === 'admin' && (
-          <AdminGuard currentUser={currentUser} onSignUpClick={() => { setAuthIsSignUp(true); setView('auth'); }}>
-            <motion.div 
-              id="admin-panel-layout" 
-            className={`flex min-h-[calc(100vh-4rem)] transition-colors duration-300 ${
-              theme === 'day' 
-                ? 'bg-slate-50 text-slate-800' 
-                : 'bg-[#0f111a] text-slate-100'
-            }`}
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-          >
-            {/* Sidebar matching the reference app in Image 2 */}
-            <aside 
-              id="admin-sidebar" 
-              className={`w-64 border-r p-5 flex flex-col justify-between shrink-0 font-sans transition-colors duration-300 ${
-                theme === 'day' 
-                  ? 'bg-white border-slate-200 text-slate-700' 
-                  : 'bg-[#0a0b10] border-slate-800/80 text-slate-400'
-              }`}
-            >
-              <div className="space-y-6">
+         {/* 7. ADMINISTRATIVE DASHBOARD PORTAL */}
+         {view === 'admin' && (
+           <AdminGuard currentUser={currentUser} onSignUpClick={() => { setAuthIsSignUp(true); setView('auth'); }}>
+             <motion.div 
+               id="admin-panel-layout" 
+               className={`flex min-h-[calc(100vh-4rem)] transition-colors duration-300 ${
+                 theme === 'day' 
+                   ? 'bg-slate-50 text-slate-800' 
+                   : 'bg-[#0f111a] text-slate-100'
+               }`}
+               initial={{ opacity: 0, y: 30 }}
+               animate={{ opacity: 1, y: 0 }}
+               transition={{ duration: 0.5, ease: "easeOut" }}
+             >
+               {/* Sidebar matching the reference app with theme customisations */}
+               <aside 
+                 id="admin-sidebar" 
+                 className={`${
+                   isSidebarCollapsed ? 'w-20 p-3' : 'w-64 p-5'
+                 } border-r flex flex-col justify-between shrink-0 font-sans ${sbBg}`}
+                 style={{
+                   transition: 'width 450ms cubic-bezier(0.16, 1, 0.3, 1), padding 450ms cubic-bezier(0.16, 1, 0.3, 1), background-color 300ms, border-color 300ms'
+                 }}
+               >
+              <div className="space-y-4">
                 {/* Header: brand name */}
-                <div className={`flex items-center gap-2.5 px-2 pb-3 border-b ${
-                  theme === 'day' ? 'border-slate-100' : 'border-slate-800/60'
-                }`}>
-                  <span className={`font-black text-sm tracking-tight uppercase font-mono ${
-                    theme === 'day' ? 'text-black' : 'text-white'
-                  }`}>Shandong Azum</span>
-                </div>
- 
-                <div className="space-y-4 pr-1">
-                  {/* Category: Application */}
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-600 uppercase tracking-wider px-2">Application</p>
-                    <button
-                      onClick={() => setAdminSubView('overview')}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        adminSubView === 'overview' 
-                          ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                          : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
+                <div className={`flex items-center gap-2.5 pb-3 border-b ${isSidebarCollapsed ? 'justify-center' : 'justify-start'} ${sbBorder}`}>
+                  <Cpu className={`w-5 h-5 shrink-0 ${
+                    sidebarTheme === 'Cyberpunk' ? 'text-pink-500 animate-pulse' : 'text-indigo-400'
+                  }`} title="G E M I N I" />
+                  {!isSidebarCollapsed && (
+                    <motion.span 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      transition={{ duration: 0.25 }}
+                      className={`font-black text-sm tracking-[0.2em] uppercase font-mono whitespace-nowrap overflow-hidden ${
+                        sidebarTheme === 'Cyberpunk' ? 'text-pink-500 shadow-[0_0_8px_rgba(255,0,85,0.25)]' :
+                        sidebarTheme === 'Slate' ? 'text-slate-100' :
+                        theme === 'day' ? 'text-black' : 'text-white'
                       }`}
                     >
-                      <Home className="w-4 h-4 text-indigo-400" />
-                      <span>Home</span>
-                    </button>
-                    {isMohab && (
-                      <>
+                      G E M I N I
+                    </motion.span>
+                  )}
+                </div>
+
+                {/* Sidebar Search Input */}
+                <div className="px-1.5">
+                  <AnimatePresence mode="wait">
+                    {!isSidebarCollapsed ? (
+                      <motion.div 
+                        key="search-expanded"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="relative w-full"
+                      >
+                        <Search className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${
+                          sidebarTheme === 'Cyberpunk' ? 'text-[#00f0ff]' :
+                          sidebarTheme === 'Slate' ? 'text-slate-500' :
+                          theme === 'day' ? 'text-slate-400' : 'text-slate-500'
+                        }`} />
+                        <input
+                          type="text"
+                          placeholder="Search sections..."
+                          value={sidebarSearchQuery}
+                          onChange={(e) => setSidebarSearchQuery(e.target.value)}
+                          className={`w-full pl-8 pr-7 py-1.5 rounded-lg text-xs font-mono border focus:outline-none transition-all duration-200 ${sbSearchClass}`}
+                        />
+                        {sidebarSearchQuery && (
+                          <button
+                            onClick={() => setSidebarSearchQuery('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 hover:text-slate-200 cursor-pointer"
+                            title="Clear search"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </motion.div>
+                    ) : (
+                      <motion.div 
+                        key="search-collapsed"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="flex justify-center"
+                      >
                         <button
-                          onClick={() => setAdminSubView('inbox')}
-                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'inbox' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Mail className="w-4 h-4 text-indigo-400" />
-                            <span>Inbox</span>
-                          </div>
-                          <span className="text-[10px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded-full">
-                            {adminInbox.length + 23}
-                          </span>
-                        </button>
-                        <button
-                          onClick={() => setAdminSubView('chat')}
-                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'chat' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-[#00f0ff]/10'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <MessageSquare className="w-4 h-4 text-indigo-400" />
-                            <span>Google Chat</span>
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => setAdminSubView('calendar')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'calendar' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
-                        >
-                          <Calendar className="w-4 h-4 text-indigo-400" />
-                          <span>Calendar</span>
-                        </button>
-                        <button
-                          onClick={() => setAdminSubView('search')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'search' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
+                          onClick={toggleSidebarCollapse}
+                          className={`p-2 rounded-lg border transition-all cursor-pointer ${sbSearchClass}`}
+                          title="Search sections (Expand sidebar)"
                         >
                           <Search className="w-4 h-4 text-indigo-400" />
-                          <span>Search</span>
                         </button>
-                        <button
-                          onClick={() => setAdminSubView('settings')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'settings' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
-                        >
-                          <Settings className="w-4 h-4 text-indigo-400" />
-                          <span>Settings</span>
-                        </button>
-                      </>
+                      </motion.div>
                     )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Inline Status Summary Panel */}
+                {!isSidebarCollapsed ? (
+                  <div className={`mx-1.5 p-2.5 rounded-xl border flex flex-col gap-1.5 transition-all duration-300 ${
+                    sidebarTheme === 'Cyberpunk' ? 'bg-purple-950/10 border-pink-500/20 text-[#00f0ff]' :
+                    sidebarTheme === 'Slate' ? 'bg-slate-950 border-slate-800 text-slate-300' :
+                    theme === 'day' ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-slate-900/40 border-slate-800/60 text-slate-300'
+                  }`}>
+                    <div className="flex items-center justify-between text-[9px] font-mono font-bold tracking-wider uppercase opacity-80">
+                      <span>System Telemetry</span>
+                      <span className="flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Live
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 text-[10px] font-mono">
+                      <div className="flex items-center gap-1 bg-slate-950/40 px-1.5 py-1 rounded border border-slate-800/40">
+                        <span className="text-[8px] text-slate-500">API:</span>
+                        <span className="text-emerald-400 font-bold">Online</span>
+                      </div>
+                      <div className="flex items-center gap-1 bg-slate-950/40 px-1.5 py-1 rounded border border-slate-800/40">
+                        <span className="text-[8px] text-slate-500">Orders:</span>
+                        <span className="text-indigo-400 font-bold">
+                          {orders.filter(o => o.status === 'processing').length || 12} Proc
+                        </span>
+                      </div>
+                    </div>
+                    {/* Sync Now button */}
+                    <button
+                      type="button"
+                      onClick={syncProductCatalog}
+                      className={`mt-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded font-mono text-[9px] font-bold uppercase border transition-all cursor-pointer ${
+                        sidebarTheme === 'Cyberpunk'
+                          ? 'bg-pink-500/10 hover:bg-pink-500/20 border-pink-500/30 text-[#00f0ff] hover:shadow-[0_0_8px_rgba(255,46,147,0.4)]'
+                          : sidebarTheme === 'Slate'
+                            ? 'bg-slate-800 hover:bg-slate-750 border-slate-700 text-slate-200'
+                            : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700 hover:text-slate-800'
+                      }`}
+                      title="Sync Product Catalog"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
+                      <span>Sync Now</span>
+                    </button>
                   </div>
+                ) : (
+                  <div className="flex justify-center my-1" title={`API: Online | Orders: ${orders.filter(o => o.status === 'processing').length || 12} Processing`}>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                  </div>
+                )}
+
+                {/* Toggle Controls for Sidebar Accordions */}
+                {!isSidebarCollapsed && (
+                  <div className="px-1.5 flex items-center justify-between">
+                    <span className={sbCatHeader}>
+                      Navigation
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={expandAll}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider uppercase border transition-all cursor-pointer ${
+                          sidebarTheme === 'Cyberpunk'
+                            ? 'bg-pink-500/10 hover:bg-pink-500/20 border-pink-500/30 text-[#00f0ff]'
+                            : sidebarTheme === 'Slate'
+                              ? 'bg-slate-800 hover:bg-slate-750 border-slate-700 text-slate-200'
+                              : theme === 'day'
+                                ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-indigo-600 hover:text-indigo-700'
+                                : 'bg-slate-900/40 hover:bg-slate-900 border-slate-800/60 text-[#00f0ff] hover:text-[#00f0ff]/80 hover:border-[#00f0ff]/30'
+                        }`}
+                        title="Expand all menus"
+                      >
+                        Expand All
+                      </button>
+                      <button
+                        onClick={collapseAll}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold font-mono tracking-wider uppercase border transition-all cursor-pointer ${
+                          sidebarTheme === 'Cyberpunk'
+                            ? 'bg-purple-950/40 hover:bg-purple-900/60 border-purple-900/40 text-purple-300'
+                            : sidebarTheme === 'Slate'
+                              ? 'bg-slate-800 hover:bg-slate-750 border-slate-700 text-slate-400'
+                              : theme === 'day'
+                                ? 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-600 hover:text-slate-800'
+                                : 'bg-slate-900/40 hover:bg-slate-900 border-slate-800/60 text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="Collapse all menus"
+                      >
+                        Collapse All
+                      </button>
+                    </div>
+                  </div>
+                )}
  
-                  {isMohab && (
-                    <>
-                      {/* Category: Products */}
-                      <div className="space-y-1 pt-1">
-                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-600 uppercase tracking-wider px-2">Products</p>
-                        <button
-                          onClick={() => setAdminSubView('products')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'products' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
+                {/* Drag and Drop Nav Menu List */}
+                <div className="space-y-4 pr-1">
+                  {sidebarCategoryOrder.map((catKey) => {
+                    // APPLICATION
+                    if (catKey === 'application' && hasApplicationMatches()) {
+                      return (
+                        <div 
+                          key="application"
+                          draggable={!isSidebarCollapsed}
+                          onDragStart={(e) => handleDragStart(e, 'application')}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, 'application')}
+                          onDragEnd={handleDragEnd}
+                          className={`relative group/cat border border-transparent rounded-lg p-0.5 transition-all duration-300 ${
+                            draggedCat === 'application' ? 'opacity-30 border-dashed border-indigo-500 bg-indigo-500/5' : ''
                           }`}
                         >
-                          <ShoppingBag className="w-4 h-4 text-indigo-400" />
-                          <span>See All Products</span>
-                        </button>
-                        <button
-                          onClick={() => setAdminSubView('analytics')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'analytics' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
-                        >
-                          <BarChart3 className="w-4 h-4 text-indigo-400" />
-                          <span>Product Analytics</span>
-                        </button>
-                        <button
-                          onClick={() => setAdminSubView('add-product')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'add-product' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
-                        >
-                          <PlusCircle className="w-4 h-4 text-indigo-400" />
-                          <span>Add Product</span>
-                        </button>
-                        <button
-                          onClick={() => setAdminSubView('add-category')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'add-category' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
-                        >
-                          <FolderPlus className="w-4 h-4 text-indigo-400" />
-                          <span>Add Category</span>
-                        </button>
-                      </div>
+                          {/* Drag handle */}
+                          {!isSidebarCollapsed && (
+                            <div className="absolute right-1 top-2.5 opacity-0 group-hover/cat:opacity-100 transition-opacity cursor-grab z-20">
+                              <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-indigo-400" />
+                            </div>
+                          )}
 
-                      {/* Category: Users */}
-                      <div className="space-y-1 pt-1">
-                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-600 uppercase tracking-wider px-2">Users</p>
-                        <button
-                          onClick={() => setAdminSubView('users')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'users' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
-                        >
-                          <Users className="w-4 h-4 text-indigo-400" />
-                          <span>See All Users</span>
-                        </button>
-                        <button
-                          onClick={() => setAdminSubView('add-user')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'add-user' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
-                          }`}
-                        >
-                          <PlusCircle className="w-4 h-4 text-indigo-400" />
-                          <span>Add User</span>
-                        </button>
-                      </div>
+                          <div className="space-y-1">
+                            {!isSidebarCollapsed ? (
+                              <button 
+                                onClick={() => setIsApplicationExpanded(!isApplicationExpanded)}
+                                className={`w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/30 rounded-lg text-left cursor-pointer group transition-all`}
+                              >
+                                <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                                  sidebarTheme === 'Cyberpunk' ? 'text-pink-500 font-mono' : 'text-slate-500 dark:text-slate-600'
+                                }`}>Application</p>
+                                <ChevronRight className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${(isApplicationExpanded || !!sidebarSearchQuery) ? 'rotate-90' : ''}`} />
+                              </button>
+                            ) : (
+                              <div className="w-full flex justify-center py-1 border-b border-slate-800/20" title="Application">
+                                <span className="text-[9px] font-bold text-slate-600">APP</span>
+                              </div>
+                            )}
+                            
+                            <AnimatePresence initial={false}>
+                              {(isApplicationExpanded || !!sidebarSearchQuery || isSidebarCollapsed) && (
+                                <motion.div
+                                  initial={isSidebarCollapsed ? undefined : { height: 0, opacity: 0 }}
+                                  animate={isSidebarCollapsed ? undefined : { height: "auto", opacity: 1 }}
+                                  exit={isSidebarCollapsed ? undefined : { height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className={`overflow-hidden space-y-1 mt-1 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}
+                                >
+                                  {matchesSearch('Home') && (
+                                    <button
+                                      onClick={() => setAdminSubView('overview')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'overview', 'overview')}`}
+                                      title={isSidebarCollapsed ? "Home (Alt+1)" : undefined}
+                                    >
+                                      <Home className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Home <span className="opacity-40 text-[9px] ml-1 font-mono">⌥1</span></span>}
+                                    </button>
+                                  )}
+                                  {isMohab && matchesSearch('Inbox') && (
+                                    <button
+                                      onClick={() => setAdminSubView('inbox')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0 relative' : 'w-full justify-between px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'inbox', 'inbox')}`}
+                                      title={isSidebarCollapsed ? `Inbox (${adminInbox.length + 23}) (Alt+2)` : undefined}
+                                    >
+                                      <div className={`flex items-center ${isSidebarCollapsed ? '' : 'gap-3'}`}>
+                                        <Mail className="w-4 h-4 text-indigo-400 shrink-0" />
+                                        {!isSidebarCollapsed && <span>Inbox <span className="opacity-40 text-[9px] ml-1 font-mono">⌥2</span></span>}
+                                      </div>
+                                      {!isSidebarCollapsed ? (
+                                        <span className="text-[10px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded-full">
+                                          {adminInbox.length + 23}
+                                        </span>
+                                      ) : (
+                                        <span className="absolute -top-1 -right-1 text-[8px] bg-indigo-600 text-white font-bold px-1 rounded-full">
+                                          {adminInbox.length + 23}
+                                        </span>
+                                      )}
+                                    </button>
+                                  )}
+                                  {isMohab && matchesSearch('Google Chat') && (
+                                    <button
+                                      onClick={() => setAdminSubView('chat')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'chat', 'chat')}`}
+                                      title={isSidebarCollapsed ? "Google Chat (Alt+3)" : undefined}
+                                    >
+                                      <MessageSquare className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Google Chat <span className="opacity-40 text-[9px] ml-1 font-mono">⌥3</span></span>}
+                                    </button>
+                                  )}
+                                  {isMohab && matchesSearch('Calendar') && (
+                                    <button
+                                      onClick={() => setAdminSubView('calendar')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'calendar', 'calendar')}`}
+                                      title={isSidebarCollapsed ? "Calendar (Alt+4)" : undefined}
+                                    >
+                                      <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Calendar <span className="opacity-40 text-[9px] ml-1 font-mono">⌥4</span></span>}
+                                    </button>
+                                  )}
+                                  {isMohab && matchesSearch('Search') && (
+                                    <button
+                                      onClick={() => setAdminSubView('search')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'search', 'search')}`}
+                                      title={isSidebarCollapsed ? "Search (Alt+5)" : undefined}
+                                    >
+                                      <Search className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Search <span className="opacity-40 text-[9px] ml-1 font-mono">⌥5</span></span>}
+                                    </button>
+                                  )}
+                                  {isMohab && matchesSearch('Settings') && (
+                                    <button
+                                      onClick={() => setAdminSubView('settings')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'settings', 'settings')}`}
+                                      title={isSidebarCollapsed ? "Settings (Alt+6)" : undefined}
+                                    >
+                                      <Settings className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Settings <span className="opacity-40 text-[9px] ml-1 font-mono">⌥6</span></span>}
+                                    </button>
+                                  )}
+                                  {isMohab && matchesSearch('Google Keep Notes') && (
+                                    <button
+                                      onClick={() => setAdminSubView('keep')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'keep', 'keep')}`}
+                                      title={isSidebarCollapsed ? "Google Keep Notes (Alt+7)" : undefined}
+                                    >
+                                      <FileText className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Google Keep <span className="opacity-40 text-[9px] ml-1 font-mono">⌥7</span></span>}
+                                    </button>
+                                  )}
+                                  {isMohab && matchesSearch('Google Drive Picker') && (
+                                    <button
+                                      onClick={() => setAdminSubView('picker')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'picker', 'picker')}`}
+                                      title={isSidebarCollapsed ? "Google Drive Picker (Alt+8)" : undefined}
+                                    >
+                                      <Folder className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Picker <span className="opacity-40 text-[9px] ml-1 font-mono">⌥8</span></span>}
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                      );
+                    }
 
-                      {/* Category: Orders / Payments */}
-                      <div className="space-y-1 pt-1">
-                        <p className="text-[10px] font-bold text-slate-500 dark:text-slate-600 uppercase tracking-wider px-2">Orders / Payments</p>
-                        <button
-                          onClick={() => setAdminSubView('transactions')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'transactions' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
+                    // PRODUCTS
+                    if (catKey === 'products' && isMohab && hasProductsMatches()) {
+                      return (
+                        <div 
+                          key="products"
+                          draggable={!isSidebarCollapsed}
+                          onDragStart={(e) => handleDragStart(e, 'products')}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, 'products')}
+                          onDragEnd={handleDragEnd}
+                          className={`relative group/cat border border-transparent rounded-lg p-0.5 transition-all duration-300 ${
+                            draggedCat === 'products' ? 'opacity-30 border-dashed border-indigo-500 bg-indigo-500/5' : ''
                           }`}
                         >
-                          <CreditCard className="w-4 h-4 text-indigo-400" />
-                          <span>See All Transactions</span>
-                        </button>
-                        <button
-                          onClick={() => setAdminSubView('add-order')}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            adminSubView === 'add-order' 
-                              ? theme === 'day' ? 'bg-indigo-50 text-indigo-600' : 'bg-[#00f0ff]/10 text-[#00f0ff]' 
-                              : theme === 'day' ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:text-white hover:bg-slate-900/50'
+                          {/* Drag handle */}
+                          {!isSidebarCollapsed && (
+                            <div className="absolute right-1 top-2.5 opacity-0 group-hover/cat:opacity-100 transition-opacity cursor-grab z-20">
+                              <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-indigo-400" />
+                            </div>
+                          )}
+
+                          <div className="space-y-1 pt-1">
+                            {!isSidebarCollapsed ? (
+                              <button 
+                                onClick={() => setIsProductsExpanded(!isProductsExpanded)}
+                                className={`w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/30 rounded-lg text-left cursor-pointer group transition-all`}
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                                    sidebarTheme === 'Cyberpunk' ? 'text-pink-500 font-mono' : 'text-slate-500 dark:text-slate-600'
+                                  }`}>Products</p>
+                                  <span className={`px-1.5 py-0.2 font-mono font-bold text-[9px] rounded-full border ${
+                                    sidebarTheme === 'Cyberpunk' 
+                                      ? 'bg-pink-500/10 border-pink-500/20 text-[#00f0ff]' 
+                                      : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                                  }`}>
+                                    {products.length}
+                                  </span>
+                                </div>
+                                <ChevronRight className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${(isProductsExpanded || !!sidebarSearchQuery) ? 'rotate-90' : ''}`} />
+                              </button>
+                            ) : (
+                              <div className="w-full flex justify-center py-1 border-b border-slate-800/20" title="Products">
+                                <span className="text-[9px] font-bold text-slate-600">PROD</span>
+                              </div>
+                            )}
+
+                            <AnimatePresence initial={false}>
+                              {(isProductsExpanded || !!sidebarSearchQuery || isSidebarCollapsed) && (
+                                <motion.div
+                                  initial={isSidebarCollapsed ? undefined : { height: 0, opacity: 0 }}
+                                  animate={isSidebarCollapsed ? undefined : { height: "auto", opacity: 1 }}
+                                  exit={isSidebarCollapsed ? undefined : { height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className={`overflow-hidden space-y-1 mt-1 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}
+                                >
+                                  {matchesSearch('See All Products') && (
+                                    <button
+                                      onClick={() => setAdminSubView('products')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'products', 'products')}`}
+                                      title={isSidebarCollapsed ? "See All Products (Alt+9)" : undefined}
+                                    >
+                                      <ShoppingBag className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>See All Products <span className="opacity-40 text-[9px] ml-1 font-mono">⌥9</span></span>}
+                                    </button>
+                                  )}
+                                  {matchesSearch('Product Analytics') && (
+                                    <button
+                                      onClick={() => setAdminSubView('analytics')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'analytics', 'analytics')}`}
+                                      title={isSidebarCollapsed ? "Product Analytics" : undefined}
+                                    >
+                                      <BarChart3 className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Product Analytics</span>}
+                                    </button>
+                                  )}
+                                  {matchesSearch('Add Product') && (
+                                    <button
+                                      onClick={() => setAdminSubView('add-product')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'add-product', 'add-product')}`}
+                                      title={isSidebarCollapsed ? "Add Product" : undefined}
+                                    >
+                                      <PlusCircle className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Add Product</span>}
+                                    </button>
+                                  )}
+                                  {matchesSearch('Add Category') && (
+                                    <button
+                                      onClick={() => setAdminSubView('add-category')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'add-category', 'add-category')}`}
+                                      title={isSidebarCollapsed ? "Add Category" : undefined}
+                                    >
+                                      <FolderPlus className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Add Category</span>}
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // USERS
+                    if (catKey === 'users' && isMohab && hasUsersMatches()) {
+                      return (
+                        <div 
+                          key="users"
+                          draggable={!isSidebarCollapsed}
+                          onDragStart={(e) => handleDragStart(e, 'users')}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, 'users')}
+                          onDragEnd={handleDragEnd}
+                          className={`relative group/cat border border-transparent rounded-lg p-0.5 transition-all duration-300 ${
+                            draggedCat === 'users' ? 'opacity-30 border-dashed border-indigo-500 bg-indigo-500/5' : ''
                           }`}
                         >
-                          <Plus className="w-4 h-4 text-indigo-400" />
-                          <span>Add Order</span>
-                        </button>
-                      </div>
-                    </>
-                  )}
+                          {/* Drag handle */}
+                          {!isSidebarCollapsed && (
+                            <div className="absolute right-1 top-2.5 opacity-0 group-hover/cat:opacity-100 transition-opacity cursor-grab z-20">
+                              <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-indigo-400" />
+                            </div>
+                          )}
+
+                          <div className="space-y-1 pt-1">
+                            {!isSidebarCollapsed ? (
+                              <button 
+                                onClick={() => setIsUsersExpanded(!isUsersExpanded)}
+                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/10 rounded-lg text-left cursor-pointer group transition-all"
+                              >
+                                <div className="flex items-center gap-1.5">
+                                  <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                                    sidebarTheme === 'Cyberpunk' ? 'text-pink-500 font-mono' : 'text-slate-500 dark:text-slate-600'
+                                  }`}>Users</p>
+                                  <span className={`px-1.5 py-0.2 font-mono font-bold text-[9px] rounded-full border ${
+                                    sidebarTheme === 'Cyberpunk' 
+                                      ? 'bg-pink-500/10 border-pink-500/20 text-[#00f0ff]' 
+                                      : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                                  }`}>
+                                    {getFilteredUsers(users).length}
+                                  </span>
+                                </div>
+                                <ChevronRight className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${(isUsersExpanded || !!sidebarSearchQuery) ? 'rotate-90' : ''}`} />
+                              </button>
+                            ) : (
+                              <div className="w-full flex justify-center py-1 border-b border-slate-800/20" title="Users">
+                                <span className="text-[9px] font-bold text-slate-600">USR</span>
+                              </div>
+                            )}
+
+                            <AnimatePresence initial={false}>
+                              {(isUsersExpanded || !!sidebarSearchQuery || isSidebarCollapsed) && (
+                                <motion.div
+                                  initial={isSidebarCollapsed ? undefined : { height: 0, opacity: 0 }}
+                                  animate={isSidebarCollapsed ? undefined : { height: "auto", opacity: 1 }}
+                                  exit={isSidebarCollapsed ? undefined : { height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className={`overflow-hidden space-y-1 mt-1 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}
+                                >
+                              {!isSidebarCollapsed && (
+                                <div className="users-quick-filter-input-wrapper px-3 py-1 bg-slate-950/30 hover:bg-slate-900/50 hover:shadow-[0_0_12px_rgba(99,102,241,0.25)] hover:border-indigo-500/30 rounded-lg mx-2 my-1 border border-slate-800/40 flex items-center gap-1.5 focus-within:border-indigo-500/50 focus-within:shadow-[0_0_15px_rgba(99,102,241,0.4)] transition-all duration-300">
+                                  <Filter className="w-3 h-3 text-slate-500 shrink-0" />
+                                  <input
+                                    type="text"
+                                    value={adminUserQuickFilter}
+                                    onChange={(e) => setAdminUserQuickFilter(e.target.value)}
+                                    placeholder="Quick Filter (e.g. Active)"
+                                    className="w-full bg-transparent border-none p-0 text-[10px] font-mono outline-none focus:outline-none focus:ring-0 text-slate-300 placeholder-slate-500"
+                                    title="Filter users instantly by attributes like Active, Suspended, Pending"
+                                  />
+                                  {/* Small count badge indicating how many users currently match the filter criteria in real-time */}
+                                  <span className="px-1.5 py-0.5 text-[8px] font-bold font-mono rounded bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 shrink-0">
+                                    {getFilteredUsers(users).length}
+                                  </span>
+                                  {adminUserQuickFilter && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setAdminUserQuickFilter('')}
+                                      className="text-[10px] text-slate-500 hover:text-slate-300 font-bold px-1"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                              {matchesSearch('See All Users') && (
+                                <button
+                                  onClick={() => setAdminSubView('users')}
+                                  className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                    isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                  } ${getSbItemClass(adminSubView === 'users', 'users')}`}
+                                  title={isSidebarCollapsed ? "See All Users (Alt+0)" : undefined}
+                                >
+                                  <Users className="w-4 h-4 text-indigo-400 shrink-0" />
+                                  {!isSidebarCollapsed && <span>See All Users <span className="opacity-40 text-[9px] ml-1 font-mono">⌥0</span></span>}
+                                </button>
+                              )}
+                              
+                              {/* Status Filter Toggle below 'Users' menu item */}
+                              <AnimatePresence initial={false}>
+                                {adminSubView === 'users' && matchesSearch('See All Users') && !isSidebarCollapsed && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                                    className="overflow-hidden"
+                                  >
+                                    <div className={`px-2.5 py-3 rounded-xl border ml-2 mt-1 space-y-2.5 transition-colors duration-300 ${sbNestedBg}`}>
+                                      <span className={`text-[9px] uppercase font-mono tracking-widest block font-bold ${
+                                        sidebarTheme === 'Cyberpunk' ? 'text-pink-500' :
+                                        sidebarTheme === 'Slate' ? 'text-slate-500' :
+                                        theme === 'day' ? 'text-slate-500' : 'text-slate-400'
+                                      }`}>
+                                        Directory Filter
+                                      </span>
+                                      
+                                      {/* CSS-Styled Segmented Toggle Switch */}
+                                      <div className={`relative flex items-center p-0.5 border rounded-lg overflow-hidden transition-colors duration-300 ${
+                                        sidebarTheme === 'Cyberpunk' ? 'bg-[#180d2b]/80 border-pink-500/20' :
+                                        sidebarTheme === 'Slate' ? 'bg-slate-950 border-slate-800' :
+                                        theme === 'day' ? 'bg-slate-200/60 border-slate-300/80' : 'bg-[#0d0e14] border-slate-800/80'
+                                      }`}>
+                                        {/* Sliding Dynamic Pill Indicator */}
+                                        <div 
+                                          className={`absolute top-0.5 bottom-0.5 rounded-md border transition-all duration-300 ease-out ${
+                                            sidebarTheme === 'Cyberpunk' ? 'bg-[#ff0055]/20 border-[#ff0055]/30' :
+                                            sidebarTheme === 'Slate' ? 'bg-slate-800 border-slate-700 shadow-sm' :
+                                            theme === 'day'
+                                              ? 'bg-white border-slate-200 shadow-sm'
+                                              : 'bg-indigo-600/20 border-indigo-500/30'
+                                          }`}
+                                          style={{
+                                            left: 
+                                              adminUserStatusFilter === 'All' ? '2px' :
+                                              adminUserStatusFilter === 'Active' ? 'calc(25% + 1px)' :
+                                              adminUserStatusFilter === 'Suspended' ? 'calc(50% + 1px)' : 'calc(75% + 1px)',
+                                            width: 'calc(25% - 4px)'
+                                          }}
+                                        />
+                                        
+                                        {(['All', 'Active', 'Suspended', 'Pending Verification'] as const).map((st) => {
+                                          const isSel = adminUserStatusFilter === st;
+                                          const shortLabel = 
+                                            st === 'All' ? 'All' :
+                                            st === 'Active' ? 'Active' :
+                                            st === 'Suspended' ? 'Susp' : 'Pend';
+                                          
+                                          const count = 
+                                            st === 'All' ? users.length :
+                                            st === 'Active' ? users.filter(u => u.status === 'active').length :
+                                            st === 'Suspended' ? users.filter(u => u.status === 'suspended').length :
+                                            users.filter(u => u.status === 'pending').length;
+
+                                          return (
+                                            <button
+                                              key={st}
+                                              title={`Filter by ${st} (${count})`}
+                                              onClick={() => setAdminUserStatusFilter(st)}
+                                              className={`relative z-10 flex-1 py-1 px-1 text-center text-[9.5px] font-bold font-mono transition-colors duration-200 cursor-pointer flex items-center justify-center gap-1 ${
+                                                isSel 
+                                                  ? sidebarTheme === 'Cyberpunk' ? 'text-[#00f0ff] font-extrabold' :
+                                                    sidebarTheme === 'Slate' ? 'text-white font-extrabold' :
+                                                    theme === 'day' ? 'text-indigo-600 font-extrabold' : 'text-indigo-400 font-extrabold' 
+                                                  : theme === 'day' ? 'text-slate-500 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'
+                                              }`}
+                                            >
+                                              <span>{shortLabel}</span>
+                                              <span className={`text-[8px] px-1 py-0.2 rounded-full font-sans font-semibold shrink-0 ${
+                                                isSel
+                                                  ? theme === 'day'
+                                                    ? 'bg-indigo-100 text-indigo-700'
+                                                    : 'bg-indigo-500/20 text-indigo-300'
+                                                  : theme === 'day'
+                                                    ? 'bg-slate-200 text-slate-600'
+                                                    : 'bg-slate-800 text-slate-400'
+                                              }`}>
+                                                {count}
+                                              </span>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                      
+                                      {/* Live status label */}
+                                      <div className="flex justify-between items-center px-0.5 text-[8.5px] font-mono">
+                                        <span className={theme === 'day' ? 'text-slate-500' : 'text-slate-400'}>Selected Status:</span>
+                                        <span className={`font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                                          adminUserStatusFilter === 'All' ? (theme === 'day' ? 'text-indigo-600' : 'text-indigo-400') :
+                                          adminUserStatusFilter === 'Active' ? 'text-emerald-500' :
+                                          adminUserStatusFilter === 'Suspended' ? 'text-rose-500' :
+                                          'text-amber-500 animate-pulse'
+                                        }`}>
+                                          <span className={`w-1.5 h-1.5 rounded-full ${
+                                            adminUserStatusFilter === 'All' ? 'bg-indigo-500' :
+                                            adminUserStatusFilter === 'Active' ? 'bg-emerald-500' :
+                                            adminUserStatusFilter === 'Suspended' ? 'bg-rose-500' :
+                                            'bg-amber-500 animate-pulse'
+                                          }`} />
+                                          {adminUserStatusFilter === 'Pending Verification' ? 'Pending' : adminUserStatusFilter}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+
+                              {matchesSearch('Add User') && (
+                                <button
+                                  onClick={() => setAdminSubView('add-user')}
+                                  className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                    isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                  } ${getSbItemClass(adminSubView === 'add-user', 'add-user')}`}
+                                  title={isSidebarCollapsed ? "Add User" : undefined}
+                                >
+                                  <PlusCircle className="w-4 h-4 text-indigo-400 shrink-0" />
+                                  {!isSidebarCollapsed && <span>Add User</span>}
+                                </button>
+                              )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // ORDERS
+                    if (catKey === 'orders' && isMohab && hasOrdersMatches()) {
+                      return (
+                        <div 
+                          key="orders"
+                          draggable={!isSidebarCollapsed}
+                          onDragStart={(e) => handleDragStart(e, 'orders')}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, 'orders')}
+                          onDragEnd={handleDragEnd}
+                          className={`relative group/cat border border-transparent rounded-lg p-0.5 transition-all duration-300 ${
+                            draggedCat === 'orders' ? 'opacity-30 border-dashed border-indigo-500 bg-indigo-500/5' : ''
+                          }`}
+                        >
+                          {/* Drag handle */}
+                          {!isSidebarCollapsed && (
+                            <div className="absolute right-1 top-2.5 opacity-0 group-hover/cat:opacity-100 transition-opacity cursor-grab z-20">
+                              <GripVertical className="w-3.5 h-3.5 text-slate-500 hover:text-indigo-400" />
+                            </div>
+                          )}
+
+                          <div className="space-y-1 pt-1">
+                            {!isSidebarCollapsed ? (
+                              <button 
+                                onClick={() => setIsOrdersExpanded(!isOrdersExpanded)}
+                                className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-slate-900/10 rounded-lg text-left cursor-pointer group transition-all"
+                              >
+                                <p className={`text-[10px] font-bold uppercase tracking-wider ${
+                                  sidebarTheme === 'Cyberpunk' ? 'text-pink-500 font-mono' : 'text-slate-500 dark:text-slate-600'
+                                }`}>Orders / Payments</p>
+                                <ChevronRight className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${(isOrdersExpanded || !!sidebarSearchQuery) ? 'rotate-90' : ''}`} />
+                              </button>
+                            ) : (
+                              <div className="w-full flex justify-center py-1 border-b border-slate-800/20" title="Orders">
+                                <span className="text-[9px] font-bold text-slate-600">ORD</span>
+                              </div>
+                            )}
+
+                            <AnimatePresence initial={false}>
+                              {(isOrdersExpanded || !!sidebarSearchQuery || isSidebarCollapsed) && (
+                                <motion.div
+                                  initial={isSidebarCollapsed ? undefined : { height: 0, opacity: 0 }}
+                                  animate={isSidebarCollapsed ? undefined : { height: "auto", opacity: 1 }}
+                                  exit={isSidebarCollapsed ? undefined : { height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                                  className={`overflow-hidden space-y-1 mt-1 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}
+                                >
+                                  {matchesSearch('See All Transactions') && (
+                                    <button
+                                      onClick={() => setAdminSubView('transactions')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'transactions', 'transactions')}`}
+                                      title={isSidebarCollapsed ? "See All Transactions" : undefined}
+                                    >
+                                      <CreditCard className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>See All Transactions</span>}
+                                    </button>
+                                  )}
+                                  {matchesSearch('Add Order') && (
+                                    <button
+                                      onClick={() => setAdminSubView('add-order')}
+                                      className={`flex items-center rounded-r-xl rounded-l-none text-xs font-bold transition-all cursor-pointer ${
+                                        isSidebarCollapsed ? 'w-10 h-10 justify-center rounded-lg border-none p-0' : 'w-full gap-3 px-3 py-2.5'
+                                      } ${getSbItemClass(adminSubView === 'add-order', 'add-order')}`}
+                                      title={isSidebarCollapsed ? "Add Order" : undefined}
+                                    >
+                                      <Plus className="w-4 h-4 text-indigo-400 shrink-0" />
+                                      {!isSidebarCollapsed && <span>Add Order</span>}
+                                    </button>
+                                  )}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })}
                 </div>
               </div>
 
-              {/* Quick Search Shortcut */}
-              {isMohab && (
-                <div className="px-2 mt-auto">
-                  <button
-                    onClick={() => {
-                      setIsAdminPaletteOpen(true);
-                      setPaletteSearchQuery('');
-                      setPaletteSelectedIndex(0);
-                    }}
-                    className={`w-full flex items-center justify-between px-3 py-2 border rounded-xl transition-all cursor-pointer text-left ${
-                      theme === 'cyberpunk'
-                        ? 'border-[#00f0ff]/20 hover:border-[#00f0ff]/50 bg-slate-950/40 text-slate-400 hover:text-[#00f0ff]'
-                        : theme === 'day'
-                          ? 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-500 hover:text-slate-800'
-                          : 'border-slate-800 hover:border-slate-700 bg-slate-900/30 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Search className="w-3.5 h-3.5 text-indigo-400" />
-                      <span className="text-[11px] font-bold">Search sub-views</span>
-                    </div>
-                    <kbd className="text-[9px] font-mono bg-slate-950 border border-slate-800 px-1.5 py-0.5 rounded text-slate-500">
-                      ⌘K
-                    </kbd>
-                  </button>
-                </div>
-              )}
-
-              {/* Bottom Profile Widget */}
-              <div className={`flex items-center justify-between border-t pt-3 mt-4 ${
-                theme === 'day' ? 'border-slate-100' : 'border-slate-800/60'
-              }`}>
-                <div className="flex items-center gap-2.5">
-                  {currentUser ? (
-                    <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-750 shrink-0">
-                      <img src={profileImage} alt="profile" className="w-full h-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 bg-gradient-to-tr from-pink-500 to-indigo-600 rounded-full flex items-center justify-center font-black text-white text-xs shadow-md shrink-0">
-                      A
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <span className={`font-extrabold text-xs tracking-tight block truncate ${
-                      theme === 'day' ? 'text-slate-800' : 'text-white'
+              {/* Theme Selector, Quick Actions, Directory Health & Footer Profile */}
+              <div className="flex flex-col gap-4 mt-auto pt-4 border-t border-dashed border-slate-850/40">
+                
+                {/* Theme Selector Widget */}
+                {!isSidebarCollapsed ? (
+                  <div className="px-2">
+                    <span className={`text-[9px] font-mono font-bold uppercase tracking-widest block mb-2 ${
+                      sidebarTheme === 'Cyberpunk' ? 'text-pink-500' : 'text-slate-500'
                     }`}>
-                      {currentUser ? (currentUser.name || currentUser.email.split('@')[0]) : 'Altayeb Yousif Dafalla'}
+                      Sidebar Theme
                     </span>
-                    <span className="text-[9px] text-slate-500 font-bold uppercase block">
-                      {currentUser ? currentUser.role : 'Super Admin'}
+                    <div className="flex items-center gap-1.5 p-0.5 bg-slate-950/40 rounded-lg border border-slate-800/40">
+                      {(['Cyberpunk', 'Slate', 'System Default'] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => {
+                            setSidebarTheme(t);
+                            localStorage.setItem('sdazum_sidebarTheme', t);
+                            triggerToast(`Sidebar color theme set to ${t}`, 'success');
+                          }}
+                          className={`flex-1 py-1 text-center text-[9px] font-bold font-mono rounded transition-all cursor-pointer ${
+                            sidebarTheme === t
+                              ? t === 'Cyberpunk'
+                                ? 'bg-pink-500 text-white shadow-[0_0_8px_rgba(255,0,85,0.25)]'
+                                : t === 'Slate'
+                                  ? 'bg-slate-700 text-white shadow-sm'
+                                  : 'bg-indigo-600 text-white shadow-sm'
+                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
+                          }`}
+                        >
+                          {t === 'System Default' ? 'Default' : t}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Reduce Motion toggle */}
+                    <div className="flex items-center justify-between mt-3 px-1">
+                      <span className={`text-[9px] font-mono font-bold uppercase tracking-widest ${
+                        sidebarTheme === 'Cyberpunk' ? 'text-pink-500' : 'text-slate-500'
+                      }`}>
+                        Reduce Motion
+                      </span>
+                      <button
+                        onClick={() => {
+                          const newVal = !reduceMotion;
+                          setReduceMotion(newVal);
+                          triggerToast(newVal ? "Reduce Motion Enabled (Static UI)" : "Reduce Motion Disabled (Animated UI)", "success");
+                        }}
+                        className={`relative inline-flex h-4 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          reduceMotion ? 'bg-indigo-600' : 'bg-slate-800'
+                        }`}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            reduceMotion ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-center" title="Cycle Sidebar Theme">
+                    <button
+                      onClick={() => {
+                        const themes: ('Cyberpunk' | 'Slate' | 'System Default')[] = ['Cyberpunk', 'Slate', 'System Default'];
+                        const nextIdx = (themes.indexOf(sidebarTheme) + 1) % themes.length;
+                        const nextTheme = themes[nextIdx];
+                        setSidebarTheme(nextTheme);
+                        localStorage.setItem('sdazum_sidebarTheme', nextTheme);
+                        triggerToast(`Sidebar theme: ${nextTheme}`, 'success');
+                      }}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer border ${sbQuickActionClass(false)}`}
+                    >
+                      <Palette className="w-3.5 h-3.5 text-indigo-400" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Quick Actions circular buttons */}
+                <div className="mx-2">
+                  {!isSidebarCollapsed && (
+                    <span className={`text-[9px] font-mono font-bold uppercase tracking-widest block mb-2 ${
+                      sidebarTheme === 'Cyberpunk' ? 'text-pink-500' : 'text-slate-500'
+                    }`}>
+                      Quick Actions
                     </span>
+                  )}
+                  <div className={`flex ${isSidebarCollapsed ? 'flex-col items-center gap-2' : 'items-center gap-3'}`}>
+                    <button
+                      onClick={() => setAdminSubView('users')}
+                      title="User Directory / Management"
+                      className={`w-7.5 h-7.5 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${sbQuickActionClass(adminSubView === 'users')}`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setAdminSubView('add-product')}
+                      title="Product Host / Add Product"
+                      className={`w-7.5 h-7.5 rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${sbQuickActionClass(adminSubView === 'add-product')}`}
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-                <button 
-                  onClick={() => {
-                    localStorage.removeItem('cyberport_user');
-                    setCurrentUser(null);
-                    setView('store');
-                    triggerToast("Logged out from admin portal successfully.", "success");
-                  }}
-                  className="text-slate-500 hover:text-rose-400 transition-colors p-1 cursor-pointer"
-                  title="Logout"
+
+                {/* Directory Health Summary Panel */}
+                {!isSidebarCollapsed ? (
+                  <div className={`mx-2 p-3 rounded-xl border transition-all duration-300 ${
+                    isSyncingHealth 
+                      ? 'ring-2 ring-emerald-500/60 scale-[1.02] bg-emerald-500/5 shadow-[0_0_15px_rgba(16,185,129,0.2)] border-emerald-500/40' 
+                      : sbHealthBg
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1 transition-all ${
+                        isSyncingHealth
+                          ? 'text-emerald-400 animate-pulse'
+                          : (sidebarTheme === 'Cyberpunk' ? 'text-pink-500' : 'text-slate-500')
+                      }`}>
+                        {isSyncingHealth && <span className="inline-block animate-spin text-[8px]">⚙️</span>}
+                        {isSyncingHealth ? 'Syncing...' : 'Directory Health'}
+                      </span>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded transition-all ${
+                        isSyncingHealth
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : (sidebarTheme === 'Cyberpunk' ? 'bg-pink-500/10 text-pink-400' :
+                             sidebarTheme === 'Slate' ? 'bg-slate-800 text-slate-300' :
+                             theme === 'day' ? 'bg-indigo-50 text-indigo-700' : 'bg-slate-850 text-slate-300')
+                      }`}>
+                        {users.length} Users
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 text-center">
+                      <div className={`p-1 rounded-lg border flex flex-col items-center justify-center transition-all duration-300 ${
+                        theme === 'day' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-emerald-500/5 border-emerald-950/30'
+                      }`}>
+                        <div className="flex items-center gap-1">
+                          <span className="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
+                          <span className="text-[8px] font-mono text-emerald-500 font-bold">Active</span>
+                        </div>
+                        <span className={`text-[10px] font-bold font-mono mt-0.5 ${
+                          theme === 'day' ? 'text-slate-800' : 'text-white'
+                        }`}>
+                          {users.filter(u => u.status === 'active').length}
+                        </span>
+                      </div>
+                      <div className={`p-1 rounded-lg border flex flex-col items-center justify-center transition-all duration-300 ${
+                        theme === 'day' ? 'bg-amber-50/50 border-amber-100' : 'bg-amber-500/5 border-amber-950/30'
+                      }`}>
+                        <div className="flex items-center gap-1">
+                          <span className="w-1 h-1 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                          <span className="text-[8px] font-mono text-amber-500 font-bold">Pend</span>
+                        </div>
+                        <span className={`text-[10px] font-bold font-mono mt-0.5 ${
+                          theme === 'day' ? 'text-slate-800' : 'text-white'
+                        }`}>
+                          {users.filter(u => u.status === 'pending').length}
+                        </span>
+                      </div>
+                      <div className={`p-1 rounded-lg border flex flex-col items-center justify-center transition-all duration-300 ${
+                        theme === 'day' ? 'bg-rose-50/50 border-rose-100' : 'bg-rose-500/5 border-rose-950/30'
+                      }`}>
+                        <div className="flex items-center gap-1">
+                          <span className="w-1 h-1 rounded-full bg-rose-500 shrink-0" />
+                          <span className="text-[8px] font-mono text-rose-500 font-bold">Susp</span>
+                        </div>
+                        <span className={`text-[10px] font-bold font-mono mt-0.5 ${
+                          theme === 'day' ? 'text-slate-800' : 'text-white'
+                        }`}>
+                          {users.filter(u => u.status === 'suspended').length}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Microservices Status List with Dynamic Telemetry-Based Color-Coded Icons */}
+                    <div className="mt-3 pt-2.5 border-t border-slate-800/40 space-y-1.5 text-[9px] font-mono">
+                      <span className={`block text-[8px] font-bold uppercase tracking-wider ${
+                        sidebarTheme === 'Cyberpunk' ? 'text-pink-500' : 'text-slate-500'
+                      }`}>Microservices Health</span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {/* Gateway status */}
+                        <div className="flex items-center justify-between bg-slate-950/20 px-2 py-1 rounded border border-slate-800/20">
+                          <span className="text-slate-400">Gateway</span>
+                          {telemetry.apiThroughput === 0 ? (
+                            <span className="text-rose-500 flex items-center gap-1" title="Critical: Offline/No Traffic">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 animate-pulse" />
+                              <X className="w-3 h-3 shrink-0" />
+                            </span>
+                          ) : telemetry.apiThroughput > 950 ? (
+                            <span className="text-amber-500 flex items-center gap-1" title="Warning: Overloaded">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                            </span>
+                          ) : (
+                            <span className="text-emerald-500 flex items-center gap-1" title="Optimal">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              <Check className="w-3 h-3 shrink-0" />
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Inventory status */}
+                        <div className="flex items-center justify-between bg-slate-950/20 px-2 py-1 rounded border border-slate-800/20">
+                          <span className="text-slate-400">Inventory</span>
+                          {telemetry.errorsLogged > 0.08 ? (
+                            <span className="text-rose-500 flex items-center gap-1" title="Critical: Query Locks">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 animate-pulse" />
+                              <X className="w-3 h-3 shrink-0" />
+                            </span>
+                          ) : telemetry.errorsLogged > 0.03 ? (
+                            <span className="text-amber-500 flex items-center gap-1" title="Warning: Lock Queue Spiking">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                            </span>
+                          ) : (
+                            <span className="text-emerald-500 flex items-center gap-1" title="Healthy">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              <Check className="w-3 h-3 shrink-0" />
+                            </span>
+                          )}
+                        </div>
+
+                        {/* SEO Engine status */}
+                        <div className="flex items-center justify-between bg-slate-950/20 px-2 py-1 rounded border border-slate-800/20">
+                          <span className="text-slate-400">SEO Engine</span>
+                          {telemetry.activeSessions === 0 ? (
+                            <span className="text-rose-500 flex items-center gap-1" title="Critical: Thread Timeout">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 animate-pulse" />
+                              <X className="w-3 h-3 shrink-0" />
+                            </span>
+                          ) : telemetry.activeSessions > 16000 ? (
+                            <span className="text-amber-500 flex items-center gap-1" title="Warning: Index Queue Congested">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                            </span>
+                          ) : (
+                            <span className="text-emerald-500 flex items-center gap-1" title="Operational">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              <Check className="w-3 h-3 shrink-0" />
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Delivery status */}
+                        <div className="flex items-center justify-between bg-slate-950/20 px-2 py-1 rounded border border-slate-800/20">
+                          <span className="text-slate-400">Delivery</span>
+                          {telemetry.apiThroughput === 0 ? (
+                            <span className="text-rose-500 flex items-center gap-1" title="Critical: Pipeline Stalled">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0 animate-pulse" />
+                              <X className="w-3 h-3 shrink-0" />
+                            </span>
+                          ) : users.length === 0 ? (
+                            <span className="text-amber-500 flex items-center gap-1" title="Warning: Empty Directory Queue">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                            </span>
+                          ) : (
+                            <span className="text-emerald-500 flex items-center gap-1" title="Fulfillment Dispatch Idle/Normal">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                              <Check className="w-3 h-3 shrink-0" />
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Server Uptime Counter */}
+                    <div className={`mt-3 pt-2.5 border-t flex items-center justify-between text-[9px] font-mono transition-colors duration-300 ${
+                      sidebarTheme === 'Cyberpunk' ? 'border-pink-500/20 text-[#00f0ff]' :
+                      sidebarTheme === 'Slate' ? 'border-slate-800 text-slate-400' :
+                      theme === 'day' ? 'border-slate-200/60 text-slate-500' : 'border-slate-800/50 text-slate-400'
+                    }`}>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                        <span className="font-bold tracking-wider">SYS LIVE</span>
+                      </div>
+                      <span className="font-bold tracking-tight">UPTIME: {formatUptime(serverUptime)}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-center" title={`SYS LIVE UPTIME: ${formatUptime(serverUptime)}`}>
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                  </div>
+                )}
+
+                {/* Search History Panel in Sidebar */}
+                {!isSidebarCollapsed && adminSearchHistory.length > 0 && (
+                  <div className={`mx-2 p-3 rounded-xl border transition-all duration-300 bg-slate-900/10 border-slate-800/40 space-y-2`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-[9px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                        sidebarTheme === 'Cyberpunk' ? 'text-pink-500' : 'text-slate-500'
+                      }`}>
+                        🔍 Search History
+                      </span>
+                      <button
+                        onClick={() => {
+                          setAdminSearchHistory([]);
+                          localStorage.removeItem('sdazum_adminSearchHistory');
+                          triggerToast("Search history cleared", "success");
+                        }}
+                        className="text-[9px] text-rose-500 hover:underline font-mono font-bold cursor-pointer"
+                        title="Clear all recent database queries"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5 max-h-[110px] overflow-y-auto pr-0.5 scrollbar-none">
+                      {adminSearchHistory.map((hQuery, hIdx) => (
+                        <button
+                          key={hIdx}
+                          onClick={() => {
+                            setAdminSubView('search');
+                            setAdminSearchText(hQuery);
+                            (window as any).adminSearchVal = hQuery;
+                            triggerToast(`Re-running query: "${hQuery}"`, 'success');
+                          }}
+                          className="w-full text-left px-2 py-1.5 bg-slate-950/20 hover:bg-slate-800/40 text-slate-300 hover:text-white rounded text-[10px] font-mono border border-slate-800/30 transition-colors truncate flex items-center justify-between group cursor-pointer"
+                          title={`Click to re-run: ${hQuery}`}
+                        >
+                          <span className="truncate">{hQuery}</span>
+                          <span className="text-[8px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity uppercase font-mono tracking-wider ml-1">Run ↵</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Global Sparkline Toggle & Catalog Sync Button */}
+                {!isSidebarCollapsed && (
+                  <div className="mx-2 p-3 rounded-xl border bg-slate-900/10 border-slate-800/40 space-y-3">
+                    {/* Toggle global sparkline visibility */}
+                    <div className="flex items-center justify-between">
+                      <span className={`text-[10px] font-mono font-bold uppercase tracking-wider ${
+                        sidebarTheme === 'Cyberpunk' ? 'text-pink-500 font-mono' : 'text-slate-400'
+                      }`}>
+                        Price Sparklines
+                      </span>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={globalPriceSparklinesVisible}
+                          onChange={(e) => {
+                            setGlobalPriceSparklinesVisible(e.target.checked);
+                            triggerToast(e.target.checked ? "Global Price Sparklines Enabled" : "Global Price Sparklines Disabled", "success");
+                          }}
+                          className="sr-only peer"
+                        />
+                        <div className="w-8 h-4 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+
+                    {/* Sync Now Catalog Button */}
+                    <button
+                      onClick={handleSyncCatalog}
+                      disabled={isSyncingCatalog}
+                      className={`w-full py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 text-[9px] font-bold font-mono tracking-wider uppercase border transition-all duration-300 cursor-pointer ${
+                        isSyncingCatalog
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : sidebarTheme === 'Cyberpunk'
+                            ? 'bg-pink-500/20 border-pink-500/40 text-[#00f0ff] hover:bg-pink-500/30 shadow-[0_0_8px_rgba(255,0,85,0.15)]'
+                            : sidebarTheme === 'Slate'
+                              ? 'bg-slate-800 border-slate-700 text-white hover:bg-slate-750'
+                              : 'bg-indigo-600/15 border-indigo-500/20 text-indigo-400 hover:bg-indigo-600/25'
+                      }`}
+                    >
+                      {isSyncingCatalog ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Syncing Catalog...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Sync Now</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* Full-width Collapse/Expand Toggle Button */}
+                <button
+                  onClick={toggleSidebarCollapse}
+                  className={`w-full py-1.5 px-2 rounded-lg flex items-center justify-center gap-2 text-[10px] font-bold font-mono border transition-all cursor-pointer ${
+                    sidebarTheme === 'Cyberpunk' ? 'bg-[#150a24]/80 border-pink-500/20 text-[#00f0ff] hover:bg-[#1f1035]' :
+                    sidebarTheme === 'Slate' ? 'bg-slate-850 hover:bg-slate-800 border-slate-750 text-slate-300' :
+                    theme === 'day' 
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200/80' 
+                      : 'bg-slate-900/60 hover:bg-slate-900 text-slate-300 border-slate-800'
+                  }`}
+                  title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
                 >
-                  <LogOut className="w-4 h-4" />
+                  {isSidebarCollapsed ? (
+                    <ChevronRight className="w-4 h-4 text-indigo-400" />
+                  ) : (
+                    <>
+                      <ChevronLeft className="w-4 h-4 text-indigo-400" />
+                      <span>Collapse Sidebar</span>
+                    </>
+                  )}
                 </button>
+
+                {/* Quick Search Shortcut */}
+                {isMohab && !isSidebarCollapsed && (
+                  <div className="px-2">
+                    <button
+                      onClick={() => {
+                        setIsAdminPaletteOpen(true);
+                        setPaletteSearchQuery('');
+                        setPaletteSelectedIndex(0);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 border rounded-xl transition-all cursor-pointer text-left ${
+                        sidebarTheme === 'Cyberpunk'
+                          ? 'border-pink-500/20 hover:border-pink-500/50 bg-[#130321] text-purple-300 hover:text-[#00f0ff]'
+                          : sidebarTheme === 'Slate'
+                            ? 'border-slate-800 hover:border-slate-750 bg-slate-950 text-slate-400 hover:text-white'
+                            : theme === 'day'
+                              ? 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-500 hover:text-slate-800'
+                              : 'border-slate-800 hover:border-slate-700 bg-slate-900/30 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Search className="w-3.5 h-3.5 text-indigo-400" />
+                        <span className="text-[11px] font-bold">Search sub-views</span>
+                      </div>
+                      <kbd className="text-[9px] font-mono bg-slate-950 border border-slate-800 px-1.5 py-0.5 rounded text-slate-500">
+                        ⌘K
+                      </kbd>
+                    </button>
+                  </div>
+                )}
+
+                {/* Bottom Profile Widget */}
+                <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} border-t pt-3 ${sbBorder}`}>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {currentUser ? (
+                      <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-750 shrink-0" title={isSidebarCollapsed ? (currentUser.name || currentUser.email.split('@')[0]) : undefined}>
+                        <img src={profileImage} alt="profile" className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 bg-gradient-to-tr from-pink-500 to-indigo-600 rounded-full flex items-center justify-center font-black text-white text-xs shadow-md shrink-0" title={isSidebarCollapsed ? 'Altayeb Yousif Dafalla' : undefined}>
+                        A
+                      </div>
+                    )}
+                    {!isSidebarCollapsed && (
+                      <div className="min-w-0">
+                        <span className={`font-extrabold text-xs tracking-tight block truncate ${
+                          sidebarTheme === 'Cyberpunk' ? 'text-[#00f0ff]' :
+                          sidebarTheme === 'Slate' ? 'text-slate-100' :
+                          theme === 'day' ? 'text-slate-800' : 'text-white'
+                        }`}>
+                          {currentUser ? (currentUser.name || currentUser.email.split('@')[0]) : 'Altayeb Yousif Dafalla'}
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-bold uppercase block">
+                          {currentUser ? currentUser.role : 'Super Admin'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {!isSidebarCollapsed && (
+                    <button 
+                      onClick={() => {
+                        localStorage.removeItem('cyberport_user');
+                        setCurrentUser(null);
+                        setView('store');
+                        triggerToast("Logged out from admin portal successfully.", "success");
+                      }}
+                      className="text-slate-500 hover:text-rose-400 transition-colors p-1 cursor-pointer"
+                      title="Logout"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </aside>
  
@@ -6679,6 +8624,8 @@ export default function App() {
                     {adminSubView === 'add-user' && 'ONBOARD REGIONAL OPERATORS'}
                     {adminSubView === 'transactions' && 'MERCHANT REVENUE LEDGER'}
                     {adminSubView === 'add-order' && 'DISPATCH MANUAL CARGO'}
+                    {adminSubView === 'keep' && 'GOOGLE KEEP NOTES'}
+                    {adminSubView === 'picker' && 'GOOGLE DRIVE FILE PICKER'}
                   </h2>
                   <p className="text-xs text-slate-500 font-mono mt-0.5">
                     Shandong Azum Import & Export Co., Ltd. // Terminal Admin Panel
@@ -6788,22 +8735,64 @@ export default function App() {
                   case 'search':
                     return (
                       <div className="bg-[#0a0b10] p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6">
-                        <div className="relative">
-                          <Search className="w-5 h-5 text-slate-500 absolute left-4 top-3.5" />
-                          <input
-                            type="text"
-                            placeholder="Query machinery serials, client emails, logistics keys, or custom engraving codes..."
-                            onChange={(e) => {
-                              (window as any).adminSearchVal = e.target.value;
-                              setAdminSubView('search'); // update
-                            }}
-                            className="w-full pl-12 pr-4 py-3 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-all font-mono"
-                          />
+                        <div className="flex flex-col gap-2">
+                          <div className="relative">
+                            <Search className="w-5 h-5 text-slate-500 absolute left-4 top-3.5" />
+                            <input
+                              type="text"
+                              value={adminSearchText}
+                              placeholder="Query machinery serials, client emails, logistics keys, or custom engraving codes..."
+                              onChange={(e) => {
+                                setAdminSearchText(e.target.value);
+                                (window as any).adminSearchVal = e.target.value;
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  addToSearchHistory(adminSearchText);
+                                }
+                              }}
+                              onBlur={() => {
+                                addToSearchHistory(adminSearchText);
+                              }}
+                              className="w-full pl-12 pr-4 py-3 bg-slate-900/80 border border-slate-800 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-all font-mono"
+                            />
+                          </div>
+                          
+                          {/* Search History Display inside Search view */}
+                          {adminSearchHistory.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className="text-[10px] text-slate-500 font-mono font-bold">Recent Queries:</span>
+                              {adminSearchHistory.map((hQuery, hIdx) => (
+                                <button
+                                  key={hIdx}
+                                  onClick={() => {
+                                    setAdminSearchText(hQuery);
+                                    (window as any).adminSearchVal = hQuery;
+                                    triggerToast(`Re-running query: "${hQuery}"`, 'success');
+                                  }}
+                                  className="px-2 py-0.5 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded text-[10px] font-mono cursor-pointer transition-colors border border-slate-700/50"
+                                >
+                                  {hQuery}
+                                </button>
+                              ))}
+                              <button
+                                onClick={() => {
+                                  setAdminSearchHistory([]);
+                                  localStorage.removeItem('sdazum_adminSearchHistory');
+                                  triggerToast("Search history cleared", "success");
+                                }}
+                                className="text-[9px] text-rose-500 hover:underline font-mono font-bold cursor-pointer"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          )}
                         </div>
+
                         {/* Search outcomes */}
                         <div className="space-y-2 max-h-[350px] overflow-y-auto">
                           {(() => {
-                            const query = ((window as any).adminSearchVal || "").toLowerCase();
+                            const query = adminSearchText.toLowerCase();
                             const matches = products.filter(p => p.name.toLowerCase().includes(query) || p.category.toLowerCase().includes(query))
                               .map(p => ({ type: 'Product', label: p.name, desc: p.category, spec: `$${p.price}` }))
                               .concat(
@@ -6874,6 +8863,20 @@ export default function App() {
 
                   case 'analytics':
                     return <AdminAnalytics products={products} theme={theme} />;
+
+                  case 'keep':
+                    return <KeepNotesClient />;
+
+                  case 'picker':
+                    return (
+                      <GooglePickerClient
+                        googleToken={googleToken}
+                        onConnect={handleConnectGmail}
+                        onDisconnect={handleDisconnectGmail}
+                        theme={theme}
+                        triggerToast={triggerToast}
+                      />
+                    );
 
                   case 'products': {
                     const filteredProducts = products.filter(p => {
@@ -7166,6 +9169,152 @@ export default function App() {
                           </div>
                         </div>
 
+                        {/* Show Stock Trend Checkbox */}
+                        <div className="bg-slate-950/40 p-3.5 rounded-xl border border-slate-800/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+                          <label className="flex items-center gap-2.5 cursor-pointer select-none text-[11px] font-mono font-bold text-slate-300 hover:text-white transition-colors">
+                            <input
+                              type="checkbox"
+                              checked={showAdminStockTrend}
+                              onChange={(e) => setShowAdminStockTrend(e.target.checked)}
+                              className="w-4 h-4 rounded border-slate-800 bg-slate-900 text-[#00f0ff] focus:ring-0 focus:ring-offset-0 cursor-pointer accent-[#00f0ff]"
+                            />
+                            <span className="flex items-center gap-1.5">
+                              <TrendingUp className="w-3.5 h-3.5 text-[#00f0ff]" />
+                              Show Stock Trend (D3.js Simulated 7-day Inventory Fluctuation history)
+                            </span>
+                          </label>
+                        </div>
+
+                        {/* Admin Table Bulk Action Custom Label Toolbar */}
+                        <AnimatePresence>
+                          {selectedAdminProducts.length > 0 && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0, y: -20 }}
+                              animate={{ opacity: 1, height: 'auto', y: 0 }}
+                              exit={{ opacity: 0, height: 0, y: -20 }}
+                              className="mb-4 overflow-hidden"
+                            >
+                              <div className="p-4 bg-gradient-to-r from-slate-900 to-indigo-950/40 border border-indigo-500/30 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-4 shadow-[0_0_20px_rgba(99,102,241,0.25)]">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-indigo-500/20 text-[#00f0ff] rounded-lg border border-indigo-500/30 animate-pulse">
+                                    <Sparkles className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <p className="text-xs font-bold text-white uppercase font-mono">
+                                      BULK MACHINERY ACTIONS // {selectedAdminProducts.length} SELECTED
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 font-mono">
+                                      Perform system updates to all selected units simultaneously
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 font-mono">
+                                  {/* Label text input */}
+                                  <div className="relative">
+                                    <input
+                                      id="admin-bulk-label-input"
+                                      type="text"
+                                      placeholder="Type custom label badge..."
+                                      className="px-3 py-1.5 bg-slate-950 border border-slate-800 text-white rounded-xl text-xs outline-none focus:border-[#00f0ff] transition-all w-48 font-sans"
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          const input = e.currentTarget;
+                                          const val = input.value.trim();
+                                          if (val) {
+                                            setBulkConfirmModal({
+                                              isOpen: true,
+                                              title: 'Confirm Bulk Admin Update',
+                                              message: `You are about to apply the custom label "${val}" to ${selectedAdminProducts.length} selected items in the registry. Proceed?`,
+                                              onConfirm: () => {
+                                                setProducts(prev => {
+                                                  const nextProds = prev.map(p => {
+                                                    if (selectedAdminProducts.includes(p.id)) {
+                                                      return { ...p, customBadge: val };
+                                                    }
+                                                    return p;
+                                                  });
+                                                  localStorage.setItem('cyberport_products', JSON.stringify(nextProds));
+                                                  return nextProds;
+                                                });
+                                                triggerToast(`Applied custom label "${val}" to ${selectedAdminProducts.length} items!`, "success");
+                                                input.value = "";
+                                                setSelectedAdminProducts([]);
+                                              }
+                                            });
+                                          }
+                                        }
+                                      }}
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 font-bold">↵</span>
+                                  </div>
+
+                                  <button
+                                    onClick={() => {
+                                      const input = document.getElementById('admin-bulk-label-input') as HTMLInputElement;
+                                      const val = input?.value.trim() || '';
+                                      if (!val) {
+                                        triggerToast("Please enter a custom label badge text first.", "error");
+                                        return;
+                                      }
+                                      setBulkConfirmModal({
+                                        isOpen: true,
+                                        title: 'Confirm Bulk Admin Update',
+                                        message: `You are about to apply the custom label "${val}" to ${selectedAdminProducts.length} selected items in the registry. Proceed?`,
+                                        onConfirm: () => {
+                                          setProducts(prev => {
+                                            const nextProds = prev.map(p => {
+                                              if (selectedAdminProducts.includes(p.id)) {
+                                                return { ...p, customBadge: val };
+                                              }
+                                              return p;
+                                            });
+                                            localStorage.setItem('cyberport_products', JSON.stringify(nextProds));
+                                            return nextProds;
+                                          });
+                                          triggerToast(`Applied custom label "${val}" to ${selectedAdminProducts.length} items!`, "success");
+                                          if (input) input.value = "";
+                                          setSelectedAdminProducts([]);
+                                        }
+                                      });
+                                    }}
+                                    className="px-3 py-1.5 bg-[#00f0ff] hover:bg-[#00f0ff]/80 text-slate-950 font-black text-[10px] uppercase rounded-xl tracking-wider transition-all cursor-pointer hover:scale-102"
+                                  >
+                                    Apply Label Badge
+                                  </button>
+
+                                  <button
+                                    onClick={() => {
+                                      setBulkConfirmModal({
+                                        isOpen: true,
+                                        title: 'Confirm Bulk Badge Clearance',
+                                        message: `You are about to clear all custom badges from ${selectedAdminProducts.length} selected items. Proceed?`,
+                                        onConfirm: () => {
+                                          setProducts(prev => {
+                                            const nextProds = prev.map(p => {
+                                              if (selectedAdminProducts.includes(p.id)) {
+                                                return { ...p, customBadge: undefined };
+                                              }
+                                              return p;
+                                            });
+                                            localStorage.setItem('cyberport_products', JSON.stringify(nextProds));
+                                            return nextProds;
+                                          });
+                                          triggerToast(`Cleared custom badges on ${selectedAdminProducts.length} items.`, "success");
+                                          setSelectedAdminProducts([]);
+                                        }
+                                      });
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white font-bold text-[10px] uppercase rounded-xl transition-all cursor-pointer"
+                                  >
+                                    Clear Badges
+                                  </button>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs text-left text-slate-300">
                             <thead>
@@ -7270,7 +9419,7 @@ export default function App() {
                                   {adminProductColumns.price && <td className="p-3 font-mono text-indigo-400 font-bold">${p.price}</td>}
                                   {adminProductColumns.stock && (
                                     <td className="p-3 font-mono">
-                                      <div className="flex flex-col gap-1 items-start">
+                                      <div className="flex flex-col gap-1.5 items-start">
                                         <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] transition-all ${
                                           (p.stock || 0) < 5 
                                             ? 'bg-rose-500/20 text-rose-400 border-2 border-rose-500 animate-pulse ring-2 ring-rose-500/30 shadow-[0_0_12px_rgba(239,68,68,0.6)]' 
@@ -7283,6 +9432,11 @@ export default function App() {
                                             <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping inline-block shrink-0" />
                                             ⚠️ RESTOCK REQ
                                           </span>
+                                        )}
+                                        {showAdminStockTrend && (
+                                          <div className="mt-1 pt-1 border-t border-slate-800/40 w-full">
+                                            <AdminStockSparkline baseStock={p.stock || 0} productId={p.id} theme={theme} />
+                                          </div>
                                         )}
                                       </div>
                                     </td>
@@ -7580,10 +9734,17 @@ export default function App() {
                       </div>
                     );
 
-                  case 'users':
+                  case 'users': {
+                    const filteredUsersForDirectory = getFilteredUsers(users.filter(u => {
+                      if (adminUserStatusFilter === 'All') return true;
+                      if (adminUserStatusFilter === 'Active') return u.status === 'active';
+                      if (adminUserStatusFilter === 'Suspended') return u.status === 'suspended' || u.status === 'banned';
+                      if (adminUserStatusFilter === 'Pending Verification') return u.status === 'pending' || u.status === 'pending_verification';
+                      return true;
+                    }));
                     return (
                       <AdminUsers 
-                        users={users} 
+                        users={filteredUsersForDirectory} 
                         onDeleteUsers={(ids) => {
                           if (!isMohab) {
                             triggerToast("Access Denied: Just Mohab can delete users", "error");
@@ -7596,6 +9757,7 @@ export default function App() {
                         onToast={triggerToast} 
                       />
                     );
+                  }
 
                   case 'add-user':
                     return (
@@ -8048,7 +10210,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
-            {/* Header: JARVIS COGNITIVE MATRIX System Bar */}
+            {/* Header: GEMINI INTELLIGENCE MATRIX System Bar */}
             <div className="flex flex-col md:flex-row items-center justify-between border-b border-teal-900 pb-4 mb-6">
               <div className="flex items-center gap-6 mb-4 md:mb-0">
                 <div className="flex items-center gap-2">
@@ -8058,7 +10220,7 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-teal-500"></span>
-                  <span className="font-mono text-[10px] text-teal-400 font-bold uppercase tracking-widest">Mansion Node</span>
+                  <span className="font-mono text-[10px] text-teal-400 font-bold uppercase tracking-widest">Intelligence Node</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-teal-500"></span>
@@ -8066,15 +10228,30 @@ export default function App() {
                 </div>
               </div>
               
-              <h1 className="text-3xl font-black text-teal-400 tracking-[0.4em] font-mono uppercase pl-[0.4em]">
-                J A R V I S
+              <h1 className={`text-3xl font-black tracking-[0.2em] font-mono uppercase pl-[0.2em] transition-all duration-300 ${
+                theme === 'day' 
+                  ? 'text-indigo-600 drop-shadow-[0_2px_4px_rgba(79,70,229,0.1)]' 
+                  : theme === 'night' 
+                    ? 'text-indigo-400 drop-shadow-[0_0_8px_rgba(99,102,241,0.35)]' 
+                    : 'text-pink-500 drop-shadow-[0_0_12px_rgba(236,72,153,0.65)] bg-gradient-to-r from-pink-500 via-[#00f0ff] to-pink-500 bg-clip-text text-transparent'
+              }`}>
+                G E M I N I
               </h1>
               
               <div className="flex items-center gap-4 mt-4 md:mt-0">
                 <div className="flex items-center gap-1.5 font-mono text-[10px] text-teal-400/70">
                   <span className="uppercase tracking-widest">Cognitive Matrix</span>
-                  <button onClick={() => setTheme(theme === 'day' ? 'night' : 'day')} className="p-1 hover:text-white transition-colors cursor-pointer" title="Adjust System Brightness">
+                  <button 
+                    onClick={() => {
+                      const nextTheme = theme === 'day' ? 'night' : theme === 'night' ? 'cyberpunk' : 'day';
+                      setTheme(nextTheme);
+                      triggerToast(`Matrix environment reconfigured to: ${nextTheme.toUpperCase()}`, "success");
+                    }} 
+                    className="p-1 hover:text-white transition-colors cursor-pointer flex items-center gap-1" 
+                    title="Cycle System Matrix Theme (Day/Night/Cyberpunk)"
+                  >
                     <Sun className="w-3.5 h-3.5" />
+                    <span className="text-[9px] uppercase font-bold text-teal-400 font-mono">({theme})</span>
                   </button>
                 </div>
                 <button 
@@ -8108,15 +10285,15 @@ export default function App() {
                   </div>
 
                   {/* Messages Feed */}
-                  <div ref={jarvisChatFeedRef} className="flex-1 h-[485px] max-h-[485px] overflow-y-auto space-y-4 mb-4 pr-1 cyber-scroll">
+                  <div ref={geminiChatFeedRef} className="flex-1 h-[485px] max-h-[485px] overflow-y-auto space-y-4 mb-4 pr-1 cyber-scroll">
                     {aiMessages.length === 0 ? (
                       <div className="flex flex-col items-center justify-center text-center h-full space-y-4">
                         <p className="text-teal-500/60 font-mono text-xs max-w-xs leading-relaxed uppercase tracking-wider">
-                          No conversation yet. Wake JARVIS and start talking.
+                          No conversation yet. Connect with Gemini and start talking.
                         </p>
                         <button
                           onClick={() => {
-                            const welcomeMsg = "Greetings, Sir. JARVIS is fully operational, cognitive matrix synced. All systems are performing at peak safety thresholds.";
+                            const welcomeMsg = "Greetings, Sir. Gemini AI is fully operational, intelligence matrix synced. All systems are performing at peak safety thresholds.";
                             setAiMessages([{ sender: 'ai', text: welcomeMsg, date: new Date().toLocaleTimeString() }]);
                             speakAiText(welcomeMsg);
                           }}
@@ -8138,9 +10315,18 @@ export default function App() {
                             </div>
                           ) : (
                             <div className="max-w-[85%] bg-slate-900/90 border border-teal-900/60 rounded-2xl rounded-tl-none p-3 shadow-md">
-                              <span className="text-[8px] font-mono font-bold text-teal-400 block mb-1 uppercase flex items-center gap-1">
-                                <img src={jarvisHelmet} className="w-3.5 h-3.5 rounded-full border border-teal-400/30 object-cover" referrerPolicy="no-referrer" />
-                                <span>JARVIS Core</span>
+                              <span className="text-[8px] font-mono font-bold text-teal-400 block mb-1 uppercase flex items-center gap-1.5">
+                                <svg className="w-3.5 h-3.5 animate-pulse shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                  <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#geminiMiniGradient)" />
+                                  <defs>
+                                    <linearGradient id="geminiMiniGradient" x1="3" y1="2" x2="21" y2="20" gradientUnits="userSpaceOnUse">
+                                      <stop offset="0%" stopColor="#4e82f7" />
+                                      <stop offset="50%" stopColor="#9b51e0" />
+                                      <stop offset="100%" stopColor="#e25c84" />
+                                    </linearGradient>
+                                  </defs>
+                                </svg>
+                                <span className="font-bold bg-linear-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">GEMINI Core</span>
                               </span>
                               <p className="text-slate-200 text-xs font-mono leading-relaxed">{msg.text}</p>
                               <span className="text-[8px] font-mono text-teal-600 block mt-1 text-right">{msg.date}</span>
@@ -8159,7 +10345,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Column 2: JARVIS REACTOR CORE & TELEMETRY CONTROLS (Center Column) */}
+              {/* Column 2: GEMINI REACTOR CORE & TELEMETRY CONTROLS (Center Column) */}
               <div className="bg-slate-950/90 border border-teal-900/60 rounded-3xl p-5 flex flex-col justify-between shadow-[0_0_20px_rgba(20,184,166,0.05)] relative overflow-hidden h-[620px]">
                 <div className="absolute inset-0 bg-linear-to-b from-transparent via-teal-500/2 to-transparent pointer-events-none cyber-grid opacity-15" />
                 
@@ -8304,6 +10490,31 @@ export default function App() {
                     </button>
                   </div>
 
+                  {/* Gemini Voice Selector Dropdown */}
+                  {availableVoices.length > 0 && (
+                    <div className="mb-6 p-3 bg-slate-900/60 border border-teal-950 rounded-xl">
+                      <label className="block text-[8px] uppercase tracking-widest text-teal-400 font-mono mb-1.5 font-bold">
+                        🔊 SELECT COGNITIVE VOICE VOICE:
+                      </label>
+                      <select
+                        value={selectedVoiceName}
+                        onChange={(e) => {
+                          setSelectedVoiceName(e.target.value);
+                          localStorage.setItem('cyberport_selected_voice', e.target.value);
+                          triggerToast(`Gemini voice updated!`, "success");
+                        }}
+                        className="w-full text-[10px] font-mono bg-slate-950 border border-teal-500/30 text-teal-300 rounded px-2.5 py-1.5 focus:outline-none focus:border-teal-400 cursor-pointer"
+                      >
+                        <option value="">Default System Voice</option>
+                        {availableVoices.map((voice) => (
+                          <option key={voice.name} value={voice.name}>
+                            {voice.name} ({voice.lang})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   {/* Command Terminal Input */}
                   <form onSubmit={handleAiQuery} className="w-full relative">
                     <div className="relative w-full flex items-center">
@@ -8343,9 +10554,9 @@ export default function App() {
                       {['TASKS', 'SCHEDULE', 'NETLINK', 'DESKTOP', '3D FAB', 'MANSION'].map((tab) => (
                         <button
                           key={tab}
-                          onClick={() => setJarvisTab(tab as any)}
+                          onClick={() => setGeminiTab(tab as any)}
                           className={`px-2.5 py-1 rounded font-mono text-[8px] font-black tracking-wider transition-all cursor-pointer uppercase shrink-0 ${
-                            jarvisTab === tab
+                            geminiTab === tab
                               ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
                               : 'text-slate-500 hover:text-slate-300'
                           }`}
@@ -8360,7 +10571,7 @@ export default function App() {
                   <div className="flex-1 overflow-y-auto min-h-0 pr-1">
                     
                     {/* TASKS SUBTAB */}
-                    {jarvisTab === 'TASKS' && (
+                    {geminiTab === 'TASKS' && (
                       <div className="space-y-4">
                         {/* Task Telemetry Overview */}
                         <div className="bg-slate-900/50 border border-teal-900/30 rounded-2xl p-4 flex items-center justify-between">
@@ -8368,22 +10579,22 @@ export default function App() {
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Task Ratio Telemetry</span>
                             <div className="flex items-center gap-2">
                               <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
-                              <span>Active Tasks: <strong className="text-teal-300">{jarvisTasks.filter(t => !t.completed).length}</strong></span>
+                              <span>Active Tasks: <strong className="text-teal-300">{geminiTasks.filter(t => !t.completed).length}</strong></span>
                             </div>
                             <div className="flex items-center gap-2">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                              <span>Completed: <strong className="text-emerald-400">{jarvisTasks.filter(t => t.completed).length}</strong></span>
+                              <span>Completed: <strong className="text-emerald-400">{geminiTasks.filter(t => t.completed).length}</strong></span>
                             </div>
                             <div className="text-slate-500">
-                              TOTAL POOL FILE RECORDS: 0{jarvisTasks.length}
+                              TOTAL POOL FILE RECORDS: 0{geminiTasks.length}
                             </div>
                           </div>
 
                           {/* Dynamic SVG Circular Ring */}
                           <div className="relative w-16 h-16 flex items-center justify-center font-mono">
                             {(() => {
-                              const total = jarvisTasks.length;
-                              const completed = jarvisTasks.filter(t => t.completed).length;
+                              const total = geminiTasks.length;
+                              const completed = geminiTasks.filter(t => t.completed).length;
                               const ratio = total > 0 ? Math.round((completed / total) * 100) : 0;
                               const strokeDasharray = 2 * Math.PI * 22; // r=22
                               const strokeDashoffset = strokeDasharray - (ratio / 100) * strokeDasharray;
@@ -8420,9 +10631,9 @@ export default function App() {
                                   priority: newTaskPriority,
                                   completed: false
                                 };
-                                setJarvisTasks(prev => [...prev, newTask]);
+                                setGeminiTasks(prev => [...prev, newTask]);
                                 setNewTaskInput("");
-                                triggerToast("New Jarvis operational task queued.", "success");
+                                triggerToast("New Gemini operational task queued.", "success");
                               }}
                               className="p-1.5 bg-teal-950 border border-teal-500/30 text-teal-400 hover:bg-teal-500 hover:text-black rounded-lg transition-all cursor-pointer font-bold text-xs"
                             >
@@ -8453,14 +10664,14 @@ export default function App() {
 
                         {/* Dynamic checklist */}
                         <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-                          {jarvisTasks.map(t => (
+                          {geminiTasks.map(t => (
                             <div key={t.id} className="flex items-center justify-between bg-slate-900/40 border border-teal-950 rounded-xl p-2.5 hover:border-teal-900/60 transition-colors">
                               <div className="flex items-center gap-2.5 min-w-0">
                                 <input
                                   type="checkbox"
                                   checked={t.completed}
                                   onChange={() => {
-                                    setJarvisTasks(prev => prev.map(item => item.id === t.id ? { ...item, completed: !item.completed } : item));
+                                    setGeminiTasks(prev => prev.map(item => item.id === t.id ? { ...item, completed: !item.completed } : item));
                                   }}
                                   className="w-3.5 h-3.5 rounded border-teal-500 text-teal-600 focus:ring-teal-500 bg-black cursor-pointer"
                                 />
@@ -8480,7 +10691,7 @@ export default function App() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setJarvisTasks(prev => prev.filter(item => item.id !== t.id));
+                                    setGeminiTasks(prev => prev.filter(item => item.id !== t.id));
                                   }}
                                   className="text-slate-500 hover:text-red-400 p-0.5 cursor-pointer transition-colors"
                                 >
@@ -8492,11 +10703,11 @@ export default function App() {
                         </div>
 
                         {/* Clear Button */}
-                        {jarvisTasks.some(t => t.completed) && (
+                        {geminiTasks.some(t => t.completed) && (
                           <button
                             type="button"
                             onClick={() => {
-                              setJarvisTasks(prev => prev.filter(t => !t.completed));
+                              setGeminiTasks(prev => prev.filter(t => !t.completed));
                               triggerToast("Completed diagnostic items cleared.", "success");
                             }}
                             className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white font-mono text-[9px] uppercase tracking-wider rounded-xl border border-teal-950/40 hover:border-teal-900 transition-all cursor-pointer"
@@ -8508,7 +10719,7 @@ export default function App() {
                     )}
 
                     {/* SCHEDULE SUBTAB */}
-                    {jarvisTab === 'SCHEDULE' && (
+                    {geminiTab === 'SCHEDULE' && (
                       <div className="space-y-3 font-mono text-[9px] text-teal-400/80">
                         <div className="p-3 bg-slate-900/40 border border-teal-950 rounded-xl space-y-1">
                           <span className="text-teal-500 text-[10px] font-bold block uppercase">08:00 AM // SYSTEM CALIBRATION</span>
@@ -8526,7 +10737,7 @@ export default function App() {
                     )}
 
                     {/* NETLINK SUBTAB */}
-                    {jarvisTab === 'NETLINK' && (
+                    {geminiTab === 'NETLINK' && (
                       <div className="space-y-4 font-mono text-[9px]">
                         <div className="space-y-1.5 p-3 bg-slate-900/40 border border-teal-950 rounded-xl">
                           <div className="flex justify-between text-slate-400"><span>Downlink:</span><span className="text-teal-400 font-bold">STABLE (98.4%)</span></div>
@@ -8552,7 +10763,7 @@ export default function App() {
                     )}
 
                     {/* DESKTOP SUBTAB */}
-                    {jarvisTab === 'DESKTOP' && (
+                    {geminiTab === 'DESKTOP' && (
                       <div className="space-y-3 font-mono text-[9px]">
                         <div className="bg-slate-900/40 border border-teal-950 p-3 rounded-xl space-y-1.5">
                           <span className="text-teal-500 text-[10px] font-bold block">SYS_PARAMETERS</span>
@@ -8572,7 +10783,7 @@ export default function App() {
                     )}
 
                     {/* 3D FAB SUBTAB */}
-                    {jarvisTab === '3D FAB' && (
+                    {geminiTab === '3D FAB' && (
                       <div className="space-y-4 text-center py-4 font-mono">
                         <span className="text-teal-500 text-[9px] uppercase tracking-wider block">HOLOGRAPHIC ROTATING MODEL</span>
                         
@@ -8592,7 +10803,7 @@ export default function App() {
                     )}
 
                     {/* MANSION SUBTAB */}
-                    {jarvisTab === 'MANSION' && (
+                    {geminiTab === 'MANSION' && (
                       <div className="space-y-3 font-mono text-[9px] text-teal-400/80">
                         <div className="p-3 bg-slate-900/40 border border-teal-950 rounded-xl space-y-2">
                           <div className="flex items-center justify-between text-[10px] font-bold text-teal-400 uppercase">
@@ -9073,8 +11284,6 @@ export default function App() {
                             <span className="text-[9px] font-bold hidden sm:inline">Mic Record</span>
                           </button>
                         )}
-
-                        {/* AI Indicator is removed per user request */}
                       </div>
 
                       {/* Main Message Form */}
@@ -9119,7 +11328,18 @@ export default function App() {
           }`}
           title="Open AI Store Concierge"
         >
-          <img src={jarvisHelmet} className="w-[67px] h-[67px] rounded-full object-cover border-2 border-[#00f0ff]/40 shadow-xl" referrerPolicy="no-referrer" />
+          <div className="w-[67px] h-[67px] rounded-full flex items-center justify-center bg-linear-to-tr from-blue-950 via-slate-900 to-indigo-950 border-2 border-[#00f0ff]/40 shadow-xl overflow-hidden">
+            <svg className="w-9 h-9 animate-pulse" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#geminiFloatingGradient)" />
+              <defs>
+                <linearGradient id="geminiFloatingGradient" x1="3" y1="2" x2="21" y2="20" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stopColor="#4e82f7" />
+                  <stop offset="50%" stopColor="#9b51e0" />
+                  <stop offset="100%" stopColor="#e25c84" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
           <span className="absolute top-1 right-1 flex h-3.5 w-3.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-pink-500"></span>
@@ -9127,148 +11347,296 @@ export default function App() {
         </button>
 
         {isAiOpen && (
-          <div className={`absolute bottom-16 left-0 w-80 sm:w-96 rounded-3xl border shadow-2xl p-4 flex flex-col justify-between h-96 z-50 font-mono text-xs ${
-            theme === 'day' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-950 border-pink-500/40 text-slate-100'
-          }`}>
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-              <div className="flex items-center gap-2">
-                <img src={jarvisHelmet} className="w-7 h-7 rounded-md object-cover border border-[#00f0ff]/20 shadow-sm" referrerPolicy="no-referrer" />
-                <div>
-                  <h4 className="font-bold text-[#00f0ff] uppercase">{t.aiAssistant}</h4>
-                  <p className="text-[9px] text-slate-500">Industrial Machine Logistics Advisor</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setIsAiVoiceEnabled(!isAiVoiceEnabled)}
-                  className={`p-1.5 rounded-lg border transition-all cursor-pointer ${
-                    isAiVoiceEnabled
-                      ? 'border-pink-500/40 bg-pink-500/10 text-pink-400 hover:bg-pink-500/20'
-                      : 'border-slate-800 bg-slate-900 text-slate-500 hover:text-slate-300'
-                  }`}
-                  title={isAiVoiceEnabled ? "Mute AI Voice" : "Unmute AI Voice"}
+          <div className="fixed inset-0 bg-[#131314] text-[#e3e3e3] z-50 flex font-sans select-none animate-fade-in">
+            {/* Left Side Bar */}
+            <div className="w-[68px] border-r border-[#2e2f30]/40 flex flex-col justify-between py-5 items-center bg-[#131314] shrink-0">
+              {/* Top Icons */}
+              <div className="flex flex-col items-center gap-6">
+                {/* Gemini Colorful Logo / Star - Clicking closes overlay to return to app */}
+                <button 
+                  onClick={() => setIsAiOpen(false)}
+                  className="w-10 h-10 flex items-center justify-center hover:scale-110 transition-all cursor-pointer relative group"
+                  title="Return to Shandong Azum"
                 >
-                  {isAiVoiceEnabled ? <Volume2 className="w-3.5 h-3.5 animate-bounce" /> : <VolumeX className="w-3.5 h-3.5" />}
+                  <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#geminiSidebarStarGradient)" />
+                    <defs>
+                      <linearGradient id="geminiSidebarStarGradient" x1="3" y1="2" x2="21" y2="20">
+                        <stop offset="0%" stopColor="#4e82f7" />
+                        <stop offset="50%" stopColor="#9b51e0" />
+                        <stop offset="100%" stopColor="#e25c84" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
                 </button>
-                <button onClick={() => setIsAiOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">
-                  <X className="w-4 h-4" />
+
+                {/* New Chat Button */}
+                <button 
+                  onClick={() => {
+                    setAiMessages([]);
+                    triggerToast("New conversation initialized", "success");
+                  }}
+                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  title="New Chat"
+                >
+                  <Plus className="w-5 h-5" />
                 </button>
+
+                {/* Search */}
+                <button 
+                  onClick={() => triggerToast("Query history active in sidebar", "success")}
+                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer" 
+                  title="Search"
+                >
+                  <Search className="w-5 h-5" />
+                </button>
+
+                {/* Clock/History */}
+                <button 
+                  onClick={() => {
+                    setAiMessages([]);
+                    triggerToast("Chat stream cleared", "success");
+                  }}
+                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-[#ff3b30] transition-colors cursor-pointer" 
+                  title="Clear Chat History"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+
+                {/* Apps Grid */}
+                <button 
+                  onClick={() => triggerToast("Direct Gemini connection active", "success")}
+                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer" 
+                  title="Dynamic Integrations"
+                >
+                  <Layers className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Bottom Icons */}
+              <div className="flex flex-col items-center gap-5">
+                {/* Settings (Gear) */}
+                <button 
+                  onClick={() => triggerToast("Settings: Enterprise connection secure", "success")}
+                  className="w-10 h-10 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer" 
+                  title="System Status"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+
+                {/* User Profile picture */}
+                <div className="w-8 h-8 rounded-full overflow-hidden border border-[#2e2f30] hover:scale-105 transition-transform" title={currentUser?.email || "Operator"}>
+                  <img 
+                    src={profileImage} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
               </div>
             </div>
 
-            {!currentUser ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center p-4 space-y-4">
-                <div className="w-12 h-12 rounded-full bg-pink-500/10 flex items-center justify-center text-pink-400 border border-pink-500/20">
-                  <Lock className="w-6 h-6" />
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col justify-between relative bg-[#131314] h-full overflow-hidden">
+              {/* Top Bar */}
+              <div className="h-16 flex items-center justify-between px-6 z-10 shrink-0 border-b border-[#2e2f30]/20">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-400 font-mono tracking-wider">GEMINI ENTERPRISE</span>
                 </div>
-                <div className="space-y-1">
-                  <h4 className="font-bold text-slate-200">AI Concierge Locked</h4>
-                  <p className="text-[10px] text-slate-400 leading-relaxed">
-                    Authentication required. Please log in or sign up to consult the AI on factory machine specifications, custom configurations, and automated diagnostics.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    setView('auth');
-                    setIsAiOpen(false);
-                  }}
-                  className="px-4 py-2 bg-[#00f0ff] hover:bg-[#00f0ff]/80 text-black font-black uppercase rounded-xl transition-all font-mono text-[10px] shadow-[0_0_8px_rgba(0,240,255,0.3)] cursor-pointer"
-                >
-                  Authorize Session
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* Chat Messages */}
-                <div ref={globalLoungeChatFeedRef} className="flex-1 overflow-y-auto py-2 space-y-2.5 pr-1 cyber-scroll">
-                  {aiMessages.map((msg, i) => (
-                    <div key={i} className={`flex flex-col ${msg.sender === 'user' ? 'items-end w-full' : 'items-start'}`}>
-                      {msg.sender === 'user' ? (
-                        <div className="flex flex-col items-end w-full space-y-1">
-                          {/* Username at the top */}
-                          <span className="text-[10px] font-bold text-[#ff4fa8] tracking-wider font-mono mr-10 uppercase">
-                            {currentUser?.name || currentUser?.email?.split('@')[0] || "Operator Guest"}
-                          </span>
-                          
-                          {/* Row with Message Bubble and Profile Image */}
-                          <div className="flex items-start gap-2.5 justify-end w-full max-w-[95%]">
-                            {/* Message Bubble */}
-                            <div className="bg-[#3c253c]/95 border border-[#ff2e93]/60 rounded-3xl rounded-tr-none p-5 flex flex-col items-center justify-center text-center gap-2.5 max-w-[80%] shadow-lg shadow-[#ff2e93]/5">
-                              <p className="text-[#ff4fa8] font-extrabold text-[13px] tracking-widest uppercase leading-relaxed font-sans text-center">{msg.text}</p>
-                              <span className="text-[#7d8b9e] font-mono text-[9px] tracking-wider font-medium text-center">{formatMessageTime(msg.date, msg.timestamp)}</span>
-                            </div>
 
-                            {/* Profile Image to the right */}
-                            <div className="shrink-0 mt-0.5">
-                              <img 
-                                src={profileImage} 
-                                alt="User Profile" 
-                                className="w-8 h-8 rounded-full object-cover border-2 border-[#ff2e93]/50 shadow-md shadow-[#ff2e93]/10"
-                                referrerPolicy="no-referrer"
-                              />
-                            </div>
+                <div className="flex items-center gap-3">
+                  {/* Upgrade Button matching screenshot */}
+                  <button 
+                    onClick={() => triggerToast("Pricing Plans: You are on the Gemini Pro Enterprise plan", "success")}
+                    className="bg-[#004b7c]/40 border border-[#004b7c]/60 text-sky-300 font-medium px-4 py-1.5 rounded-full flex items-center gap-1.5 hover:bg-[#004b7c]/60 transition-all text-xs cursor-pointer shadow-sm shadow-[#004b7c]/20"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
+                    <span>Upgrade</span>
+                  </button>
+
+                  {/* New Chat pen icon */}
+                  <button 
+                    onClick={() => {
+                      setAiMessages([]);
+                      triggerToast("New conversation initialized", "success");
+                    }}
+                    className="w-9 h-9 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
+                    title="New Chat"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+
+                  {/* Close / Return to App Button */}
+                  <button 
+                    onClick={() => setIsAiOpen(false)}
+                    className="w-9 h-9 rounded-full hover:bg-[#1e1f20] flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer border border-[#2e2f30]"
+                    title="Return to Shandong Azum"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Main Interactive Space */}
+              <div className="flex-1 flex flex-col justify-center overflow-y-auto px-4 md:px-20 py-6 relative">
+                {!aiMessages.some(m => m.sender === 'user') ? (
+                  /* HOMEPAGE / FIRST STATE - MATCHING IMAGE 1 */
+                  <div className="max-w-2xl w-full mx-auto flex flex-col items-center justify-center text-center space-y-10 animate-fade-in my-auto select-none">
+                    {/* Animated Large Greeting matching image 1 */}
+                    <h1 className="text-4xl sm:text-5xl font-semibold text-[#e3e3e3] tracking-tight bg-gradient-to-r from-[#e3e3e3] via-[#e3e3e3] to-[#808080] bg-clip-text text-transparent">
+                      What's the vibe, {currentUser?.name || 'mohab'}?
+                    </h1>
+
+                    {/* Input pill search container */}
+                    <form onSubmit={handleAiQuery} className="w-full">
+                      <div className="relative w-full max-w-2xl bg-[#1e1f20] hover:bg-[#2e2f30] focus-within:bg-[#2e2f30] rounded-full p-1 border border-transparent focus-within:border-slate-700/50 shadow-lg flex items-center px-4 transition-all duration-300">
+                        {/* Plus Icon left */}
+                        <button 
+                          type="button" 
+                          onClick={() => triggerToast("Context Attachment Protocol active", "success")}
+                          className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-5 h-5" />
+                        </button>
+
+                        {/* Input Textbox */}
+                        <input
+                          type="text"
+                          placeholder="Ask Gemini"
+                          value={aiInput}
+                          onChange={(e) => setAiInput(e.target.value)}
+                          className="flex-1 bg-transparent border-none outline-none text-white text-sm py-3 px-3 placeholder-slate-400 focus:ring-0"
+                        />
+
+                        {/* Model Selector & Mic Button */}
+                        <div className="flex items-center gap-2">
+                          <div className="relative group">
+                            <button 
+                              type="button"
+                              className="bg-[#282a2d] hover:bg-slate-800 text-slate-300 hover:text-white px-3 py-1 rounded-full text-xs font-medium font-sans flex items-center gap-1 border border-transparent transition-all cursor-pointer"
+                            >
+                              <span>Flash Extended</span>
+                              <ChevronRight className="w-3 h-3 rotate-90 text-slate-400" />
+                            </button>
+                          </div>
+
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setIsAiVoiceEnabled(!isAiVoiceEnabled);
+                              triggerToast(isAiVoiceEnabled ? "Voice silenced" : "Voice active", "success");
+                            }}
+                            className={`p-2 rounded-full hover:bg-slate-800 transition-colors cursor-pointer ${
+                              isAiVoiceEnabled ? 'text-pink-400 animate-pulse' : 'text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            <Mic className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                ) : (
+                  /* ACTIVE CHAT FEED - MATCHING IMAGE 2 */
+                  <div className="max-w-3xl w-full mx-auto flex-1 flex flex-col justify-between h-full">
+                    {/* Scrollable message container */}
+                    <div className="flex-1 overflow-y-auto space-y-8 pr-2 mb-4 scrollbar-thin scrollbar-thumb-slate-800/80" ref={globalLoungeChatFeedRef}>
+                      {aiMessages.map((msg, idx) => {
+                        const isUser = msg.sender === 'user';
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`flex flex-col w-full animate-fade-in ${
+                              isUser ? 'items-end' : 'items-start'
+                            }`}
+                          >
+                            {isUser ? (
+                              /* USER MESSAGE: Rounded Dark Pill on the Right */
+                              <div className="bg-[#1e1f20] text-slate-100 rounded-3xl px-6 py-3 max-w-[75%] text-left shadow-md text-sm font-sans">
+                                {msg.text}
+                              </div>
+                            ) : (
+                              /* GEMINI RESPONSE: Plain text on the Left with Mini Spark */
+                              <div className="w-full flex gap-3 text-left">
+                                {/* Colorful Mini Gemini Spark Icon on the Left */}
+                                <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 bg-transparent mt-0.5">
+                                  <svg className="w-5 h-5 animate-pulse" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2C12 2 12.5 7.5 14 9C15.5 10.5 21 11 21 11C21 11 15.5 11.5 14 13C12.5 14.5 12 20 12 20C12 20 11.5 14.5 10 13C8.5 11.5 3 11 3 11C3 11 8.5 10.5 10 9C11.5 7.5 12 2 12 2Z" fill="url(#miniSpark)" />
+                                    <defs>
+                                      <linearGradient id="miniSpark" x1="3" y1="2" x2="21" y2="20">
+                                        <stop offset="0%" stopColor="#4285f4" />
+                                        <stop offset="50%" stopColor="#9b72cb" />
+                                        <stop offset="100%" stopColor="#d96570" />
+                                      </linearGradient>
+                                    </defs>
+                                  </svg>
+                                </div>
+
+                                {/* Plain White Answer text */}
+                                <div className="flex-1 text-slate-200 text-sm leading-relaxed font-sans whitespace-pre-wrap select-text selection:bg-slate-700">
+                                  {msg.text}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bottom query bar stayed fixed at the bottom of active chat */}
+                    <div className="border-t border-[#2e2f30]/40 pt-4 bg-[#131314] sticky bottom-0">
+                      <form onSubmit={handleAiQuery} className="w-full">
+                        <div className="relative w-full max-w-3xl bg-[#1e1f20] hover:bg-[#2e2f30] focus-within:bg-[#2e2f30] rounded-full p-1 border border-transparent focus-within:border-slate-700/50 shadow-lg flex items-center px-4 transition-all duration-300">
+                          <button 
+                            type="button" 
+                            onClick={() => triggerToast("Context Attachment Protocol active", "success")}
+                            className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                          >
+                            <Plus className="w-5 h-5" />
+                          </button>
+
+                          <input
+                            type="text"
+                            placeholder="Ask Gemini"
+                            value={aiInput}
+                            onChange={(e) => setAiInput(e.target.value)}
+                            className="flex-1 bg-transparent border-none outline-none text-white text-sm py-2.5 px-3 placeholder-slate-400 focus:ring-0"
+                          />
+
+                          <div className="flex items-center gap-2">
+                            <button 
+                              type="button"
+                              className="bg-[#282a2d] hover:bg-slate-800 text-slate-300 hover:text-white px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>Flash Extended</span>
+                              <ChevronRight className="w-3 h-3 rotate-90 text-slate-400" />
+                            </button>
+
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setIsAiVoiceEnabled(!isAiVoiceEnabled);
+                                triggerToast(isAiVoiceEnabled ? "Voice silenced" : "Voice active", "success");
+                              }}
+                              className={`p-2 rounded-full hover:bg-slate-800 transition-colors cursor-pointer ${
+                                isAiVoiceEnabled ? 'text-pink-400 animate-pulse' : 'text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              <Mic className="w-5 h-5" />
+                            </button>
                           </div>
                         </div>
-                      ) : (
-                        <>
-                          <div className="p-2.5 rounded-2xl max-w-[85%] leading-relaxed bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none">
-                            <p>{msg.text}</p>
-                          </div>
-                          <span className="text-[8px] text-slate-600 mt-0.5">{formatMessageTime(msg.date, msg.timestamp)}</span>
-                        </>
-                      )}
+                      </form>
+
+                      {/* Disclaimer matching the footer text in image 2 */}
+                      <p className="text-[10px] text-center text-slate-500 mt-2 pb-1 font-sans">
+                        Gemini is AI and can make mistakes.
+                      </p>
                     </div>
-                  ))}
-                </div>
-
-                {/* Suggested quick prompt tabs */}
-                <div className="flex gap-1 overflow-x-auto pb-1 mb-2">
-                  {['CNC Milling specs', 'Robotic arm reach', 'Fiber laser power', 'Claim balance'].map((prompt) => (
-                    <button
-                      key={prompt}
-                      onClick={() => {
-                        setAiInput(prompt);
-                      }}
-                      className="px-2 py-1 bg-slate-900 border border-slate-800 hover:border-pink-500 text-slate-400 hover:text-white rounded text-[9px] whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Form Input query */}
-                <form onSubmit={handleAiQuery} className="flex gap-2 border-t border-slate-800 pt-2">
-                  <div className="relative flex-1 flex items-center">
-                    <input
-                      type="text"
-                      placeholder={t.askAi}
-                      value={aiInput}
-                      onChange={(e) => setAiInput(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 focus:border-pink-500 text-slate-200 rounded-xl pl-3 pr-8 outline-none py-2 text-[11px]"
-                    />
-                    <button
-                      type="button"
-                      onClick={toggleListening}
-                      title="Speak query"
-                      className={`hidden absolute right-2 p-1.5 rounded-lg transition-colors cursor-pointer ${
-                        isListening 
-                          ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/50' 
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                      }`}
-                    >
-                      {isListening ? <StopCircle className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-                    </button>
                   </div>
-                  <button
-                    type="submit"
-                    className="p-2 bg-pink-500 text-white rounded-xl hover:bg-pink-600 cursor-pointer shrink-0"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
-              </>
-            )}
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -10369,40 +12737,198 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* FLOATING COMPARE TRIGGER BAR PANEL */}
+      {/* BULK ACTION CONFIRMATION MODAL */}
       <AnimatePresence>
-        {compareProductIds.length >= 2 && (
+        {bulkConfirmModal.isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className={`w-full max-w-md p-6 rounded-3xl border shadow-2xl font-sans ${
+                theme === 'day'
+                  ? 'bg-white border-slate-200 text-slate-800 shadow-slate-200'
+                  : theme === 'night'
+                    ? 'bg-slate-900 border-slate-800 text-slate-100 shadow-slate-950'
+                    : 'bg-[#0b0c14] border-pink-500/20 text-white shadow-pink-500/5'
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`p-2.5 rounded-xl ${
+                  theme === 'day' ? 'bg-amber-100 text-amber-600' : 'bg-amber-500/10 text-amber-400'
+                }`}>
+                  <AlertTriangle className="w-5 h-5 animate-pulse" />
+                </div>
+                <h3 className="text-sm font-black uppercase font-mono tracking-wider">
+                  {bulkConfirmModal.title}
+                </h3>
+              </div>
+              
+              <p className={`text-xs mb-6 leading-relaxed ${
+                theme === 'day' ? 'text-slate-500' : 'text-slate-400'
+              }`}>
+                {bulkConfirmModal.message}
+              </p>
+
+              <div className="flex items-center justify-end gap-3 font-mono text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setBulkConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                  className={`px-4 py-2 rounded-xl border transition-all cursor-pointer font-bold ${
+                    theme === 'day'
+                      ? 'bg-white border-slate-200 hover:bg-slate-50 text-slate-500'
+                      : 'bg-slate-900/50 border-slate-800 hover:bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    bulkConfirmModal.onConfirm();
+                    setBulkConfirmModal(prev => ({ ...prev, isOpen: false }));
+                  }}
+                  className={`px-4 py-2 font-black text-white rounded-xl transition-all cursor-pointer hover:scale-105 active:scale-95 ${
+                    theme === 'cyberpunk'
+                      ? 'bg-pink-500 hover:bg-pink-600 glow-pink'
+                      : theme === 'day'
+                        ? 'bg-slate-900 hover:bg-slate-850'
+                        : 'bg-indigo-600 hover:bg-indigo-500'
+                  }`}
+                >
+                  CONFIRM ACTION
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* PERSISTENT COMPARE SELECTION BAR AT THE BOTTOM */}
+      <AnimatePresence>
+        {compareProductIds.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 50, scale: 0.95 }}
-            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 border px-5 py-3 rounded-2xl flex flex-wrap items-center gap-4 shadow-2xl backdrop-blur-md font-sans ${
+            initial={{ y: 120, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 120, opacity: 0 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 180 }}
+            className={`fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-md shadow-[0_-12px_40px_rgba(0,0,0,0.25)] font-sans transition-all duration-300 pb-safe ${
               theme === 'day' 
-                ? 'bg-white border-slate-200 text-slate-800' 
-                : 'bg-slate-900/95 border-slate-800 text-white'
+                ? 'bg-white/95 border-slate-200 text-slate-800' 
+                : theme === 'night'
+                  ? 'bg-slate-900/95 border-slate-800 text-white'
+                  : 'bg-slate-950/95 border-pink-500/30 text-white shadow-[0_-10px_35px_rgba(236,72,153,0.15)]'
             }`}
           >
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-pink-500 animate-bounce" />
-              <span className="text-xs font-mono font-black uppercase tracking-widest">
-                Compare Mode: {compareProductIds.length} Products Checked
-              </span>
-            </div>
-            <div className="flex items-center gap-2 border-l border-slate-700/50 pl-4">
-              <button
-                onClick={() => setShowCompareModal(true)}
-                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-md"
-              >
-                Compare Now
-              </button>
-              <button
-                onClick={() => setCompareProductIds([])}
-                className={`px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
-                  theme === 'day' ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                }`}
-              >
-                Clear
-              </button>
+            <div className="max-w-7xl mx-auto px-4 py-3 sm:py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+              {/* Left Side Info */}
+              <div className="flex items-center gap-3 self-start md:self-auto">
+                <div className={`p-2 rounded-xl flex items-center justify-center ${
+                  theme === 'cyberpunk' ? 'bg-pink-500/10 text-pink-400' : 'bg-indigo-600/10 text-indigo-500'
+                }`}>
+                  <Layers className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
+                    Compare Selection
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-black ${
+                      compareProductIds.length === 4
+                        ? 'bg-rose-500 text-white'
+                        : theme === 'cyberpunk' ? 'bg-pink-500/20 text-pink-400' : 'bg-indigo-600/20 text-indigo-500'
+                    }`}>
+                      {compareProductIds.length}/4 Selected
+                    </span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest mt-0.5">
+                    {compareProductIds.length < 2 
+                      ? 'Add at least 2 machinery items to compare specs' 
+                      : 'Specs and pricing side-by-side analysis ready'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Middle Slots (Up to 4) */}
+              <div className="flex items-center gap-2.5 sm:gap-4 overflow-x-auto py-1 max-w-full">
+                {Array.from({ length: 4 }).map((_, index) => {
+                  const pId = compareProductIds[index];
+                  const p = pId ? products.find(prod => prod.id === pId) : null;
+                  return (
+                    <div
+                      key={index}
+                      className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl border flex flex-col items-center justify-center transition-all shrink-0 ${
+                        p
+                          ? theme === 'day'
+                            ? 'bg-slate-50 border-slate-200'
+                            : theme === 'night'
+                              ? 'bg-slate-800 border-slate-700'
+                              : 'bg-slate-900 border-pink-500/20'
+                          : 'border-dashed border-slate-700/40'
+                      }`}
+                    >
+                      {p ? (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCompareProductIds(prev => prev.filter(id => id !== p.id));
+                            }}
+                            className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-rose-500 hover:bg-rose-600 text-white shadow-md z-10 cursor-pointer transition-transform hover:scale-110"
+                            title="Remove"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center p-1">
+                            {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
+                              <img src={p.image} alt={p.name} className="w-full h-full object-cover rounded" />
+                            ) : (
+                              <ProductSVG type={p.image} color={p.colors?.[0]?.value || '#94A3B8'} className="w-full h-full" />
+                            )}
+                          </div>
+                          <span className={`text-[8px] font-mono font-bold truncate w-full px-1 text-center ${
+                            theme === 'day' ? 'text-slate-600' : 'text-slate-400'
+                          }`}>
+                            {p.name}
+                          </span>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1 text-slate-500 select-none">
+                          <span className="text-[12px] font-black opacity-30">+</span>
+                          <span className="text-[8px] font-mono tracking-wider uppercase font-black opacity-40">Slot {index + 1}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Right Side Actions */}
+              <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                <button
+                  onClick={() => setCompareProductIds([])}
+                  className={`px-3.5 py-2 text-[10px] font-mono font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
+                    theme === 'day' 
+                      ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' 
+                      : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+                  }`}
+                >
+                  Clear All
+                </button>
+                <button
+                  disabled={compareProductIds.length < 2}
+                  onClick={() => setShowCompareModal(true)}
+                  className={`px-5 py-2 text-[10px] font-mono font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer shadow-md ${
+                    compareProductIds.length >= 2
+                      ? theme === 'cyberpunk'
+                        ? 'bg-pink-600 hover:bg-pink-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.4)] hover:scale-105 active:scale-95'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(79,70,229,0.3)]'
+                      : 'bg-slate-800/40 text-slate-500 border border-slate-800 cursor-not-allowed opacity-50'
+                  }`}
+                  title={compareProductIds.length < 2 ? "Select at least 2 items to compare" : "Compare selected specs"}
+                >
+                  {compareProductIds.length < 2 ? "Need 2 Items" : "Compare Now"}
+                </button>
+              </div>
             </div>
           </motion.div>
         )}

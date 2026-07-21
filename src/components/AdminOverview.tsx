@@ -33,6 +33,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   TrendingDown,
+  LineChart,
+  Cpu,
+  Sparkles,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -91,6 +94,36 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ products, orders, 
   const activeSessions = telemetry ? telemetry.activeSessions : 12482;
   const apiThroughput = telemetry ? `${telemetry.apiThroughput}ms` : '842ms';
   const errorsLogged = telemetry ? `${telemetry.errorsLogged.toFixed(2)}%` : '0.02%';
+
+  // Dynamic Cognitive Financial and Product metrics
+  const cognitiveFinance = useMemo(() => {
+    const totalOrderValue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const completedOrders = orders.filter(o => o.status === 'success' || o.status === 'delivered');
+    const completedRevenue = completedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const avgOrderValue = orders.length > 0 ? totalOrderValue / orders.length : 0;
+    
+    // Top-selling SKU
+    const sortedBySales = [...products].sort((a, b) => (b.salesCount || 0) - (a.salesCount || 0));
+    const topSKU = sortedBySales[0]?.name || 'Industrial Heavy Duty Machinery';
+    const topSKUSales = sortedBySales[0]?.salesCount || 0;
+    
+    // Inventory Health & Alert
+    const outOfStock = products.filter(p => p.stock === 0).length;
+    const lowStock = products.filter(p => p.stock > 0 && p.stock < 10).length;
+    const catalogCount = products.length;
+    
+    return {
+      totalOrderValue,
+      completedRevenue,
+      avgOrderValue,
+      topSKU,
+      topSKUSales,
+      outOfStock,
+      lowStock,
+      catalogCount,
+      profitEstimate: totalOrderValue * 0.28 // 28% typical margin
+    };
+  }, [products, orders]);
 
   const revenueData = telemetry ? telemetry.revenueData : [
     { name: 'April', Total: 120, Successful: 98 },
@@ -1219,6 +1252,145 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ products, orders, 
             })}
           </div>
         )}
+      </div>
+
+      {/* 🧠 Azum Cognitive Brain™ - Real-Time Business Intelligence & Financial Diagnoses */}
+      <div 
+        id="azum-cognitive-intelligence-brain" 
+        className={`p-6 rounded-3xl border mb-6 transition-all ${
+          theme === 'cyberpunk'
+            ? 'bg-black/80 border-pink-500/30 text-slate-200 shadow-[0_0_20px_rgba(236,72,153,0.15)]'
+            : theme === 'night'
+              ? 'bg-[#151b26] border-slate-800/80 text-slate-200 shadow-xl'
+              : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+        }`}
+      >
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800/60 pb-3.5 mb-4">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-500/10 rounded-xl text-indigo-500">
+              <Cpu className="w-5 h-5 animate-pulse text-indigo-500 dark:text-indigo-400" />
+            </div>
+            <div>
+              <span className="text-[10px] text-pink-500 font-mono font-black uppercase tracking-widest block">Cognitive Business Intelligence</span>
+              <h3 className="text-sm font-black font-mono tracking-tight uppercase">
+                Azum Cognitive Brain™ - Real-Time Financial & Product Diagnostic
+              </h3>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-[9px] font-mono text-slate-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <span>Telemetry online</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left: Interactive Simulated Thought Process Stream */}
+          <div className="lg:col-span-7 flex flex-col justify-between bg-slate-950 text-slate-400 p-4 rounded-2xl border border-slate-800 font-mono text-[10px] space-y-3">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                <span className="text-[9px] font-bold text-[#00f0ff] uppercase tracking-wider flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-[#00f0ff]" />
+                  Active Brain Reasoning Queue
+                </span>
+                <span className="text-[8px] text-slate-600">60FPS Multi-threaded Stream</span>
+              </div>
+
+              {/* Dynamic thinking steps */}
+              <div className="space-y-2 text-[9px] leading-relaxed overflow-y-auto max-h-[140px] pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                <div className="flex gap-2 items-start">
+                  <span className="text-emerald-500">✔</span>
+                  <span>[INGEST] Pulled current machinery index database size: <b>{cognitiveFinance.catalogCount} assets</b> live in product matrix.</span>
+                </div>
+                <div className="flex gap-2 items-start">
+                  <span className="text-emerald-500">✔</span>
+                  <span>[AUDIT] Scanned orders ledger ({orders.length} orders total). Total gross revenue computed at <b>${cognitiveFinance.totalOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>.</span>
+                </div>
+                <div className="flex gap-2 items-start text-indigo-400">
+                  <span className="animate-spin text-indigo-400 font-bold">⚙</span>
+                  <span>[CALC] Average machinery cart value: <b>${cognitiveFinance.avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b> per purchase.</span>
+                </div>
+                <div className="flex gap-2 items-start text-pink-400">
+                  <span className="animate-pulse">✦</span>
+                  <span>[PREDICT] Estimated net machine margins: <b>${cognitiveFinance.profitEstimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b> (at standard 28% margin threshold).</span>
+                </div>
+                {cognitiveFinance.lowStock > 0 || cognitiveFinance.outOfStock > 0 ? (
+                  <div className="flex gap-2 items-start text-amber-500">
+                    <span className="animate-bounce">⚠</span>
+                    <span>[ALERT] Low-stock threat discovered: <b>{cognitiveFinance.lowStock} products</b> near threshold; <b>{cognitiveFinance.outOfStock} out-of-stock</b> completely.</span>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 items-start text-emerald-400">
+                    <span>✔</span>
+                    <span>[HEALTH] All machine product lines within stable parameters. No immediate restock triggers.</span>
+                  </div>
+                )}
+                <div className="flex gap-2 items-start text-slate-500">
+                  <span>▶</span>
+                  <span>[DIAGNOSTIC] Best Selling Machinery Unit is currently: <b>{cognitiveFinance.topSKU}</b>. Sales: <b>{cognitiveFinance.topSKUSales}</b> units.</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-900 flex justify-between items-center text-[8px] text-slate-500">
+              <span>Updated automatically on store state mutation</span>
+              <span>Model ID: Azum-V4-Pro</span>
+            </div>
+          </div>
+
+          {/* Right: Dynamic Cognitive Analysis Cards */}
+          <div className="lg:col-span-5 flex flex-col justify-between gap-4">
+            <div className="space-y-3.5">
+              <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 font-mono block">Strategic Advisor Insights</span>
+              
+              <div className="space-y-2.5">
+                {/* Money Insight Indicator */}
+                <div className="p-3 bg-indigo-500/5 rounded-xl border border-indigo-500/10 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-wider font-mono">Net Profit Factor</span>
+                    <p className="text-lg font-black font-mono">
+                      ${cognitiveFinance.profitEstimate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider font-mono block">Average Ticket</span>
+                    <span className="text-xs font-mono font-bold text-slate-400">
+                      ${cognitiveFinance.avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Product Catalog Health Score indicator */}
+                <div className="p-3 bg-pink-500/5 rounded-xl border border-pink-500/10 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-[8px] font-bold text-pink-400 uppercase tracking-wider font-mono">Catalog Health Score</span>
+                    <p className="text-lg font-black font-mono">
+                      {Math.max(40, 100 - (cognitiveFinance.lowStock * 5) - (cognitiveFinance.outOfStock * 15))}%
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider font-mono block">Catalog Size</span>
+                    <span className="text-xs font-mono font-bold text-slate-400">
+                      {cognitiveFinance.catalogCount} Heavy Units
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Strategic text block summarizing "how does it going" */}
+            <div className="p-3 bg-slate-100/50 dark:bg-black/20 rounded-xl border border-slate-200 dark:border-slate-900 font-sans text-[11px] leading-relaxed">
+              <p className="text-slate-600 dark:text-slate-400">
+                Azum cognitive diagnostic model reports that your machinery sales are **{cognitiveFinance.totalOrderValue > 50000 ? 'surging aggressively' : 'recovering in a steady upward trajectory'}.** 
+                With **{orders.length} orders** booked and **{cognitiveFinance.catalogCount} active products** in stock, the platform maintains a safe liquidity cushion. 
+                {cognitiveFinance.lowStock > 0 ? (
+                  <span> Critical action item: **{cognitiveFinance.lowStock} machine lines** require restock orders to prevent customer delivery friction.</span>
+                ) : (
+                  <span> Machinery logistics pipeline is completely cleared; no pending restock alerts.</span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Metrics Row */}

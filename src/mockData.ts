@@ -5,14 +5,53 @@
 
 import { Product, User, Order } from './types';
 
-import helicalGear from './assets/images/helical_gear_3d_1783941589730.jpg';
-import bearingBlock from './assets/images/bearing_block_3d_1783941604326.jpg';
-import bevelGear from './assets/images/bevel_gear_3d_1783941620595.jpg';
-import factoryPresses from './assets/images/factory_presses_3d_1783941636039.jpg';
-import industrialBolt from './assets/images/industrial_bolt_3d_1783941653838.jpg';
-import machineShaft from './assets/images/machine_shaft_3d_1783941669533.jpg';
-import metalCollar from './assets/images/metal_collar_3d_1783941689645.jpg';
-import oilExpeller from './assets/images/oil_expeller_3d_1783941706140.jpg';
+import helicalGear from './assets/products-image/ABUIABACGAAg-OuSngYolMOAWTBuOJEB.jpg';
+import bearingBlock from './assets/products-image/ABUIABACGAAg0JmJnwYoqPPsggQw9AM49AM.jpg';
+import bevelGear from './assets/products-image/ABUIABACGAAg0MiSngYoi82plgYwgQM4mAI.jpg';
+import factoryPresses from './assets/products-image/ABUIABACGAAg0NSyngYok6K1BjCABTjhAw.jpg';
+import industrialBolt from './assets/products-image/ABUIABACGAAg0NiOngYo3vbjoAMw2AQ4vQE.jpg';
+import machineShaft from './assets/products-image/ABUIABACGAAg0a2HjAYo0u2rHTDYBDjWCw.jpg';
+import metalCollar from './assets/products-image/ABUIABACGAAg0a2HjAYomMq00wYw2AQ4vwo.jpg';
+import oilExpeller from './assets/products-image/ABUIABACGAAg0a2HjAYoxKS5mgIw2AQ4vgg.jpg';
+
+// Newly imported user-uploaded images
+import img_ozeevig from './assets/products-image/ABUIABACGAAg0a2HjAYozeevigMw2AQ42AQ.jpg';
+import img_ffRng from './assets/products-image/ABUIABACGAAg0ffRngYom6WSoQQw2gU40wQ.jpg';
+import img_rDOng from './assets/products-image/ABUIABACGAAg0rDOngYogPiSvwQwgAU44QM.jpg';
+import img_9NTe1 from './assets/products-image/ABUIABACGAAg162HjAYo9NTe1wMw2AQ48wE.jpg';
+import img_ohr2h from './assets/products-image/ABUIABACGAAg162HjAYohr2hoQEw2AQ4oAY.jpg';
+import img_6tb1P from './assets/products-image/ABUIABACGAAg1K2HjAYo6tb1PzDYBDj8BA.jpg';
+import img_4XvrA from './assets/products-image/ABUIABACGAAg1K2HjAYoj4XvrAYw2AQ42AQ.jpg';
+import img_kuf89 from './assets/products-image/ABUIABACGAAg1K2HjAYokuf89AQw2AQ4pQY.jpg';
+import img_NDL4g from './assets/products-image/ABUIABACGAAg1b3OngYowNDL4gUwhwE4ZQ.jpg';
+import img_MTmuw from './assets/products-image/ABUIABACGAAg1c_yngYosMTmuwYwgAU44QM.jpg';
+import img_KWl_A from './assets/products-image/ABUIABACGAAg2bXOngYoxKWl_AYwhwE4ZQ.jpg';
+import img_OD0xQ from './assets/products-image/ABUIABACGAAg3LGHjAYowOD0xQcw2AQ4wgM.jpg';
+import img_O7Ryw from './assets/products-image/ABUIABACGAAg3_yJngYouO7RywMw8wg4sAk.jpg';
+import img_4cud1 from './assets/products-image/ABUIABACGAAg3bGHjAYo4cud1gMw2AQ4jQM.jpg';
+import img_oL_dp from './assets/products-image/ABUIABACGAAg3bGHjAYooL_dpQcw2AQ4jQM.jpg';
+import img_1_e6_ from './assets/products-image/ABUIABACGAAg4K7OngYo1_e6_QQwgAU44QM.jpg';
+import img_MizEz from './assets/products-image/ABUIABACGAAg4cbTwwYo7MizEzCABTjSAg.jpg';
+import img_dewhq from './assets/products-image/ABUIABAEGAAg-r7TwwYomdewhQQw0gQ4jAM.png';
+import img_Y65gE from './assets/products-image/ABUIABAEGAAg68rOngYo_Y-65gEwjwY4sAQ.png';
+import img_PXT9A from './assets/products-image/ABUIABAEGAAgoM7OngYogPXT9AMwkAY4sAQ.png';
+import img_2onbp from './assets/products-image/ABUIABAEGAAgosjOngYo2onbpwIwkAY4sAQ.png';
+import img_Zyb2w from './assets/products-image/ABUIABAEGAAgpb7TwwYosZyb2wIw4gU47AM.png';
+import img_P0_wc from './assets/products-image/ABUIABAEGAAgrLeKngYog9P0_wcwuQg41Qk.png';
+import img_72KzD from './assets/products-image/ABUIABAEGAAgrrKHjAYohN72KzDYBDjgAg.png';
+import img_Mqhxg from './assets/products-image/ABUIABAEGAAgrrKHjAYoiMqhxgcw2AQ4ugM.png';
+import img_6rC3w from './assets/products-image/ABUIABAEGAAgrrKHjAYok6rC3wQw2AQ4mQI.png';
+
+const imagesGlob = import.meta.glob('./assets/products-image/*.{png,jpg,jpeg,svg,webp,JPG,PNG,JPEG,PNG-1,jpg-1}', { eager: true, import: 'default' });
+
+export const ALL_UPLOADED_IMAGES = Object.entries(imagesGlob).map(([key, value]) => {
+  const nameWithExt = key.substring(key.lastIndexOf('/') + 1);
+  const name = nameWithExt.replace(/\.[^/.]+$/, "");
+  return {
+    name: name,
+    url: value as string
+  };
+});
 
 export const INITIAL_PRODUCTS: Product[] = [
   {

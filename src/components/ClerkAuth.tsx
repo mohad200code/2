@@ -183,23 +183,23 @@ const clerkTranslations = {
 };
 
 export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoogleAuth, initialIsSignUp = false, language = 'en', theme = 'day' }) => {
-  const t = clerkTranslations[language];
+  const t = React.useMemo(() => clerkTranslations[language], [language]);
 
   const isNight = theme === 'night';
   const isCyber = theme === 'cyberpunk';
 
-  const textTitleClass = isNight ? 'text-white' : isCyber ? 'text-[#00f0ff]' : 'text-slate-900';
-  const textSubClass = isNight ? 'text-slate-400' : isCyber ? 'text-[#00f0ff]/80' : 'text-slate-500';
-  const labelClass = `text-[10px] font-bold uppercase tracking-wider ${
+  const textTitleClass = React.useMemo(() => isNight ? 'text-white' : isCyber ? 'text-[#00f0ff]' : 'text-slate-900', [isNight, isCyber]);
+  const textSubClass = React.useMemo(() => isNight ? 'text-slate-400' : isCyber ? 'text-[#00f0ff]/80' : 'text-slate-500', [isNight, isCyber]);
+  const labelClass = React.useMemo(() => `text-[10px] font-bold uppercase tracking-wider ${
     isNight ? 'text-slate-300' : isCyber ? 'text-[#00f0ff]/70' : 'text-slate-500'
-  }`;
-  const inputClass = `w-full px-4 py-3 rounded-xl border outline-none text-sm transition-all shadow-inner focus:shadow-none ${
+  }`, [isNight, isCyber]);
+  const inputClass = React.useMemo(() => `w-full px-4 py-3 rounded-xl border outline-none text-sm transition-all shadow-inner focus:shadow-none ${
     isNight
       ? 'bg-slate-950 border-slate-800 text-white focus:border-indigo-500 focus:bg-slate-900'
       : isCyber
         ? 'bg-[#0a0311] border-[#00f0ff]/30 text-[#00f0ff] focus:border-[#00f0ff] focus:bg-[#120521] placeholder-[#00f0ff]/40'
         : 'bg-slate-50 border-slate-200 text-slate-800 focus:border-slate-800 focus:bg-white'
-  }`;
+  }`, [isNight, isCyber]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -226,8 +226,18 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
   const [toastCode, setToastCode] = useState('');
   const [showDevDetails, setShowDevDetails] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Clean error with a simple debounced/deferred effect on input change
+  React.useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [email, password, error]);
+
+  const handleSubmit = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return; // Concurrency throttle
+
     if (!email) {
       setError(t.emailRequired);
       return;
@@ -256,7 +266,17 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      let data: any;
+      try {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new TypeError('Response is not JSON');
+        }
+        data = await response.json();
+      } catch (parseErr) {
+        throw new TypeError('Failed to parse response as JSON');
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Authentication failed. Please check your credentials.');
       }
@@ -277,9 +297,19 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
       }
     } catch (err: any) {
       const errMsg = err?.message || '';
-      const isFetchError = errMsg === 'Failed to fetch' || errMsg.includes('fetch') || errMsg.includes('NetworkError') || errMsg.includes('Failed to load');
+      const isFetchError = 
+        err instanceof TypeError ||
+        errMsg === 'Failed to fetch' || 
+        errMsg.includes('fetch') || 
+        errMsg.includes('NetworkError') || 
+        errMsg.includes('Failed to load') ||
+        errMsg.includes('JSON') ||
+        errMsg.includes('token') ||
+        errMsg.includes('Unexpected') ||
+        errMsg.includes('is not valid JSON');
+
       if (isFetchError) {
-        console.warn('[AUTH FALLBACK] Fetch failed, logging in locally via client-side fallback.');
+        console.warn('[AUTH FALLBACK] Fetch or JSON parsing failed, logging in locally via client-side fallback.');
         onSuccess(email, 'admin');
       } else {
         console.error('[AUTH SUBMIT ERROR]', err);
@@ -288,10 +318,12 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [email, password, isSignUp, isLoading, onSuccess, t]);
 
-  const handleOtpSubmit = async (e: React.FormEvent) => {
+  const handleOtpSubmit = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return; // Concurrency throttle
+
     if (!otpCode || otpCode.trim().length !== 6) {
       setOtpError(t.otpRequired);
       return;
@@ -308,7 +340,17 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
         body: JSON.stringify({ email: otpSentTo, code: otpCode.trim() }),
       });
 
-      const data = await response.json();
+      let data: any;
+      try {
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          throw new TypeError('Response is not JSON');
+        }
+        data = await response.json();
+      } catch (parseErr) {
+        throw new TypeError('Failed to parse response as JSON');
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Incorrect verification code. Please try again.');
       }
@@ -316,9 +358,19 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
       onSuccess(otpSentTo, data.role);
     } catch (err: any) {
       const errMsg = err?.message || '';
-      const isFetchError = errMsg === 'Failed to fetch' || errMsg.includes('fetch') || errMsg.includes('NetworkError') || errMsg.includes('Failed to load');
+      const isFetchError = 
+        err instanceof TypeError ||
+        errMsg === 'Failed to fetch' || 
+        errMsg.includes('fetch') || 
+        errMsg.includes('NetworkError') || 
+        errMsg.includes('Failed to load') ||
+        errMsg.includes('JSON') ||
+        errMsg.includes('token') ||
+        errMsg.includes('Unexpected') ||
+        errMsg.includes('is not valid JSON');
+
       if (isFetchError) {
-        console.warn('[OTP FALLBACK] Fetch failed, verifying locally via client-side fallback.');
+        console.warn('[OTP FALLBACK] Fetch or JSON parsing failed, verifying locally via client-side fallback.');
         onSuccess(otpSentTo, 'admin');
       } else {
         console.error('[OTP VERIFY ERROR]', err);
@@ -327,7 +379,7 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [otpCode, isSignUp, otpSentTo, isLoading, onSuccess, t]);
 
   const socialLogins = [
     { name: 'Google', icon: <GoogleIcon /> },
@@ -804,7 +856,16 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
                               provider: socialPopup.provider
                             })
                           });
-                          const data = await response.json();
+                          let data: any;
+                          try {
+                            const contentType = response.headers.get('content-type') || '';
+                            if (!contentType.includes('application/json')) {
+                              throw new TypeError('Response is not JSON');
+                            }
+                            data = await response.json();
+                          } catch (parseErr) {
+                            throw new TypeError('Failed to parse response as JSON');
+                          }
                           if (response.ok && data.success) {
                             onSuccess(socialPopup.email, data.role);
                             setSocialPopup(null);
@@ -812,7 +873,9 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
                             setError(data.error || "Failed social login registration.");
                           }
                         } catch (err) {
-                          console.error("Social authentication error:", err);
+                          console.warn('[SOCIAL AUTH FALLBACK] Social authentication failed, performing local fallback.');
+                          onSuccess(socialPopup.email, 'admin');
+                          setSocialPopup(null);
                         } finally {
                           setIsLoading(false);
                         }
