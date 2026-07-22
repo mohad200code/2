@@ -1129,6 +1129,31 @@ export default function App() {
     }
   }, [products, productsLoaded]);
 
+  // Real-time periodic polling to receive product updates added by other users on the live domain
+  useEffect(() => {
+    if (!productsLoaded) return;
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/products');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+            // Only update if stringified version differs to avoid unnecessary state triggers
+            if (JSON.stringify(data.products) !== JSON.stringify(products)) {
+              setProducts(data.products);
+              try {
+                localStorage.setItem('cyberport_products', JSON.stringify(data.products));
+              } catch (e) {}
+            }
+          }
+        }
+      } catch (err) {
+        // Silently handle network polling errors
+      }
+    }, 6000);
+    return () => clearInterval(pollInterval);
+  }, [productsLoaded, products]);
+
   // Periodic Trend Alert simulated decrease based on configurable sensitivity threshold
   useEffect(() => {
     const alertInterval = setInterval(() => {
@@ -1291,13 +1316,16 @@ export default function App() {
       triggerToast("Product catalog synchronized successfully. 24 products updated.", "success");
     }, 1500);
   };
-  const [currency, setCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD');
+  const [currency, setCurrency] = useState<'USD' | 'EUR' | 'GBP' | 'CNY'>('USD');
   const formatPrice = (amount: number): string => {
     if (currency === 'EUR') {
       return `€${(amount * 0.92).toFixed(2)}`;
     }
     if (currency === 'GBP') {
       return `£${(amount * 0.78).toFixed(2)}`;
+    }
+    if (currency === 'CNY') {
+      return `¥${(amount * 7.23).toFixed(2)}`;
     }
     return `$${amount.toFixed(2)}`;
   };
@@ -1844,7 +1872,82 @@ export default function App() {
   const [paletteSelectedIndex, setPaletteSelectedIndex] = useState(0);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
    const [isListening, setIsListening] = useState(false);
+   const [isGeminiVoiceRecording, setIsGeminiVoiceRecording] = useState<boolean>(false);
    const [speechActive, setSpeechActive] = useState(true);
+   const [audioWaveHeights, setAudioWaveHeights] = useState<number[]>([40, 75, 30, 90, 60, 100, 45, 80, 50, 95, 35, 70, 85, 40, 90, 60, 30, 75]);
+
+   useEffect(() => {
+     let animId: number;
+     let audioCtx: AudioContext | null = null;
+     let analyser: AnalyserNode | null = null;
+     let source: MediaStreamAudioSourceNode | null = null;
+     let stream: MediaStream | null = null;
+     let intervalId: any = null;
+
+     const isActive = isListening || isGeminiVoiceRecording;
+
+     if (isActive) {
+       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+         navigator.mediaDevices.getUserMedia({ audio: true })
+           .then((userStream) => {
+             stream = userStream;
+             const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+             if (!AudioContextClass) return;
+             audioCtx = new AudioContextClass();
+             analyser = audioCtx.createAnalyser();
+             analyser.fftSize = 64;
+             source = audioCtx.createMediaStreamSource(userStream);
+             source.connect(analyser);
+
+             const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+             const updateMicLevels = () => {
+               if (!analyser) return;
+               analyser.getByteFrequencyData(dataArray);
+               const newHeights = Array.from({ length: 18 }).map((_, idx) => {
+                 const rawVal = dataArray[idx % dataArray.length] || 0;
+                 const mapped = Math.max(15, Math.min(100, Math.round((rawVal / 255) * 85 + 15 + Math.random() * 12)));
+                 return mapped;
+               });
+               setAudioWaveHeights(newHeights);
+               animId = requestAnimationFrame(updateMicLevels);
+             };
+             updateMicLevels();
+           })
+           .catch(() => {
+             let step = 0;
+             intervalId = setInterval(() => {
+               step++;
+               const newHeights = Array.from({ length: 18 }).map((_, idx) => {
+                 const base = Math.sin(step * 0.25 + idx * 0.45) * 35 + 50;
+                 const jitter = Math.random() * 30;
+                 return Math.max(15, Math.min(100, Math.round(base + jitter)));
+               });
+               setAudioWaveHeights(newHeights);
+             }, 70);
+           });
+       } else {
+         let step = 0;
+         intervalId = setInterval(() => {
+           step++;
+           const newHeights = Array.from({ length: 18 }).map((_, idx) => {
+             const base = Math.sin(step * 0.25 + idx * 0.45) * 35 + 50;
+             const jitter = Math.random() * 30;
+             return Math.max(15, Math.min(100, Math.round(base + jitter)));
+           });
+           setAudioWaveHeights(newHeights);
+         }, 70);
+       }
+     }
+
+     return () => {
+       if (animId) cancelAnimationFrame(animId);
+       if (intervalId) clearInterval(intervalId);
+       if (source) try { source.disconnect(); } catch(e) {}
+       if (stream) try { stream.getTracks().forEach(t => t.stop()); } catch(e) {}
+       if (audioCtx) try { audioCtx.close(); } catch(e) {}
+     };
+   }, [isListening, isGeminiVoiceRecording]);
 
    const toggleListening = () => {
      if (isListening) {
@@ -2511,7 +2614,6 @@ export default function App() {
   const [isGeminiAddMenuOpen, setIsGeminiAddMenuOpen] = useState<boolean>(false);
   const [isGeminiMoreUploadsOpen, setIsGeminiMoreUploadsOpen] = useState<boolean>(false);
   const [isGeminiMoreToolsOpen, setIsGeminiMoreToolsOpen] = useState<boolean>(false);
-  const [isGeminiVoiceRecording, setIsGeminiVoiceRecording] = useState<boolean>(false);
   const speechRecognitionInstanceRef = useRef<any>(null);
 
   const [isAiVoiceEnabled, setIsAiVoiceEnabled] = useState<boolean>(() => {
@@ -4957,7 +5059,7 @@ export default function App() {
 
           {/* Currency Toggle Widget */}
           <div className="flex items-center gap-0.5 border border-slate-700/30 rounded-xl p-0.5 bg-slate-950/25" id="currency-toggle-widget">
-            {(['USD', 'EUR', 'GBP'] as const).map((curr) => (
+            {(['USD', 'CNY'] as const).map((curr) => (
               <button
                 key={curr}
                 onClick={() => {
@@ -4974,7 +5076,7 @@ export default function App() {
                 }`}
                 title={`Switch prices to ${curr}`}
               >
-                {curr}
+                {curr === 'CNY' ? 'CNY (¥)' : curr}
               </button>
             ))}
           </div>
@@ -7547,13 +7649,6 @@ export default function App() {
                                               </div>
                                             </div>
                                           </div>
-
-                                          {/* Machinery Geolocation Tracker */}
-                                          <MachineryGeolocationTracker 
-                                            orderId={o.id} 
-                                            theme={theme} 
-                                            machineryName={o.products[0]?.name || 'Industrial Heavy Duty Machinery'} 
-                                          />
 
                                           {/* Shipping log console output terminal lines */}
                                           <div className="bg-black/80 rounded-2xl p-4 border border-slate-900 font-mono text-[9px] text-slate-400 leading-relaxed space-y-1">
@@ -10625,16 +10720,16 @@ export default function App() {
               })()}
 
               {/* PRINT SUMMARY FOOTER FOR LAST PAGE */}
-              <div className="print-footer hidden print:block mt-8 pt-6 border-t-2 border-black page-break-inside-avoid">
+              <div className="print-footer summary-footer hidden print:block mt-8 pt-6 border-t-2 border-black page-break-inside-avoid">
                 <div className="grid grid-cols-3 gap-6 font-mono text-xs mb-6">
                   <div className="p-3 border border-black rounded-lg bg-gray-50">
-                    <span className="block text-[10px] text-gray-600 uppercase font-bold">Total Products</span>
+                    <span className="block text-[10px] text-gray-600 uppercase font-bold">Total Product Count</span>
                     <span className="text-lg font-black text-black">{products.length} Units</span>
                   </div>
                   <div className="p-3 border border-black rounded-lg bg-gray-50">
-                    <span className="block text-[10px] text-gray-600 uppercase font-bold">Total Inventory Valuation</span>
+                    <span className="block text-[10px] text-gray-600 uppercase font-bold">Aggregate Inventory Valuation</span>
                     <span className="text-lg font-black text-black">
-                      ${products.reduce((acc, p) => acc + (Number(p.price || 0) * Number(p.stock ?? 1)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {formatPrice(products.reduce((acc, p) => acc + (Number(p.price || 0) * Number(p.stock ?? 1)), 0))}
                     </span>
                   </div>
                   <div className="p-3 border border-black rounded-lg bg-gray-50">
@@ -10647,14 +10742,21 @@ export default function App() {
                   <div>
                     <p className="font-bold text-black text-sm">Sdazum Global Import & Export Co., Ltd.</p>
                     <p className="text-[10px] text-gray-600">Official System Generated Report • Confidential</p>
+                    <p className="text-[10px] text-gray-800 font-semibold mt-1">
+                      Printed at: {(() => {
+                        const d = new Date();
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                      })()}
+                    </p>
                   </div>
-                  <div className="text-center w-72 border-b-2 border-black pb-1">
+                  <div className="text-center w-80 border-b-2 border-black pb-1">
                     <div className="text-base font-serif italic text-black font-bold mb-1">Mohab Mohnad</div>
                     <div className="text-[10px] text-gray-800 uppercase font-bold border-t border-gray-300 pt-1">
                       Administrator Digital Signature Field
                     </div>
-                    <div className="text-[9px] text-gray-500 font-mono mt-0.5">
-                      Authorized Systems Administrator // Date: {new Date().toLocaleDateString('en-US')}
+                    <div className="text-[9px] text-gray-600 font-mono mt-0.5">
+                      Authorized Systems Administrator // Printed at {new Date().toLocaleTimeString('en-US')} // Date: {new Date().toLocaleDateString('en-US')}
                     </div>
                   </div>
                 </div>
@@ -12523,41 +12625,7 @@ export default function App() {
                           {language === 'ar' ? 'من أين نبدأ؟' : language === 'zh' ? '从哪里开始？' : 'Where should we start?'}
                         </h1>
 
-                        {/* Interactive Suggestion Cards Grid */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full max-w-xl">
-                          {[
-                            { title: 'Create cyberpunk futuristic neon car', text: 'Animate futuristic concept sport car', icon: Image, view: 'images' },
-                            { title: 'Compose short melodic synthwave sound track', text: '30s retro ambient gaming loop', icon: Music, view: 'music' },
-                            { title: 'Produce hyperrealistic laser video loop', text: 'A futuristic laser storm animation', icon: Video, view: 'video' },
-                            { title: 'Perform search query on current stock levels', text: 'Is Shandong Azum online?', icon: Search, view: 'chat', customPrompt: 'Find live stock updates for SD Azum' }
-                          ].map((suggest, i) => {
-                            const SugIcon = suggest.icon;
-                            return (
-                              <button
-                                key={i}
-                                onClick={() => {
-                                  if (suggest.customPrompt) {
-                                    setAiInput(suggest.customPrompt);
-                                  } else {
-                                    setGeminiActiveView(suggest.view as any);
-                                  }
-                                  triggerToast(`Loaded suggested preset`, "success");
-                                }}
-                                className={`p-4 rounded-2xl text-left border transition-all hover:scale-102 cursor-pointer flex flex-col justify-between h-[110px] ${
-                                  (theme === 'day' || theme === 'cyberpunk-light')
-                                    ? 'bg-white border-slate-200 hover:shadow-md hover:border-blue-400 text-slate-800'
-                                    : 'bg-[#1e1f20]/60 border-[#2e2f30]/40 hover:bg-[#282a2d] hover:border-slate-700/60 text-slate-200'
-                                }`}
-                              >
-                                <span className="text-[12px] font-medium leading-relaxed">{suggest.title}</span>
-                                <div className="flex items-center justify-between w-full text-slate-500">
-                                  <span className="text-[10px]">{suggest.text}</span>
-                                  <SugIcon className="w-4 h-4 text-blue-400" />
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        {/* Interactive Suggestion Cards Grid removed */}
                       </div>
                     ) : (
                       /* Active Multi-turn Conversation Feed */
@@ -13554,14 +13622,12 @@ export default function App() {
                         <span className="text-xs text-blue-400 font-medium mr-2 animate-pulse shrink-0">
                           {language === 'ar' ? 'جاري الاستماع...' : language === 'zh' ? '正在聆听...' : 'Listening...'}
                         </span>
-                        {[40, 75, 30, 90, 60, 100, 45, 80, 50, 95, 35, 70, 85, 40, 90, 60, 30, 75].map((height, idx) => (
+                        {audioWaveHeights.map((height, idx) => (
                           <div
                             key={idx}
-                            className="w-1 bg-gradient-to-t from-blue-500 via-sky-400 to-indigo-500 rounded-full animate-pulse"
+                            className="w-1 bg-gradient-to-t from-blue-500 via-sky-400 to-indigo-500 rounded-full transition-all duration-75 ease-out"
                             style={{
-                              height: `${Math.max(12, height * 0.35)}px`,
-                              animationDelay: `${(idx % 5) * 120}ms`,
-                              animationDuration: '600ms'
+                              height: `${Math.max(12, height * 0.35)}px`
                             }}
                           />
                         ))}
