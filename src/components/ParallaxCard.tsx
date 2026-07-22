@@ -137,7 +137,9 @@ export const ParallaxCard: React.FC<ParallaxCardProps> = ({
     >
       {/* Holographic interactive reflection shine layer */}
       <motion.div
-        className="absolute inset-0 rounded-3xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 mix-blend-overlay overflow-hidden"
+        className={`absolute inset-0 rounded-3xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 overflow-hidden ${
+          theme === 'day' ? '' : 'mix-blend-overlay'
+        }`}
         style={{
           background: shineBackground,
         }}

@@ -147,35 +147,6 @@ export const MachineryGeolocationTracker: React.FC<MachineryGeolocationTrackerPr
             </h4>
           </div>
         </div>
-
-        {/* GPS state badge */}
-        <div className="flex items-center gap-1.5">
-          {gpsStatus === 'active' && (
-            <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 text-[9px] font-mono font-black uppercase tracking-wider rounded-lg border border-emerald-500/20 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
-              Live Geolocation Lock
-            </span>
-          )}
-          {gpsStatus === 'detecting' && (
-            <span className="px-2.5 py-1 bg-indigo-500/15 text-indigo-400 text-[9px] font-mono font-black uppercase tracking-wider rounded-lg border border-indigo-500/20 flex items-center gap-1.5">
-              <RefreshCw className="w-3 h-3 animate-spin" />
-              Locking Satellites...
-            </span>
-          )}
-          {gpsStatus === 'simulated' && (
-            <span className="px-2.5 py-1 bg-amber-500/15 text-amber-400 text-[9px] font-mono font-black uppercase tracking-wider rounded-lg border border-amber-500/20 flex items-center gap-1" title="Fallback used when browser blocked location or in sandbox context">
-              <ShieldAlert className="w-3 h-3 text-amber-400 shrink-0" />
-              Secure Simulated Path
-            </span>
-          )}
-          <button
-            onClick={initializeLiveTracking}
-            className="p-1 bg-slate-900 border border-slate-800 hover:border-pink-500/40 text-slate-400 hover:text-white transition-colors rounded-lg cursor-pointer"
-            title="Refresh active telemetry feed"
-          >
-            <RefreshCw className="w-3 h-3" />
-          </button>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">

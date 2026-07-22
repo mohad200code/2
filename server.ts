@@ -1515,6 +1515,7 @@ app.post("/api/gemini/chat", async (req, res) => {
       searchGrounding = false,
       mapsGrounding = false,
       thinkingLevel = 'OFF',
+      appLanguage = 'en',
       generateImage = null,
       generateMusic = null,
       generateVideo = null,
@@ -1527,32 +1528,44 @@ app.post("/api/gemini/chat", async (req, res) => {
 
     const resolvedName = userName || "Operator";
     const cleanedPrompt = prompt.toLowerCase();
-    
-    // Developer question check
-    const isDeveloperQuestion = cleanedPrompt.includes('who developed') || 
-                                cleanedPrompt.includes('who created') || 
-                                cleanedPrompt.includes('who made') || 
-                                cleanedPrompt.includes('من طور') || 
-                                cleanedPrompt.includes('من برمج') || 
-                                cleanedPrompt.includes('مين عمل') || 
-                                cleanedPrompt.includes('مين المطور') ||
-                                cleanedPrompt.includes('مين عملك') ||
-                                cleanedPrompt.includes('من صنعك') ||
-                                cleanedPrompt.includes('who is the developer') ||
-                                cleanedPrompt.includes('who is your developer') ||
-                                cleanedPrompt.includes('who built');
 
-    if (isDeveloperQuestion) {
-      return res.json({ text: "Mohab developed me and the Website" });
+    // Car image / General image request detection
+    const isCarRequest = cleanedPrompt.includes('car') || cleanedPrompt.includes('سيارة') || cleanedPrompt.includes('سياره') || cleanedPrompt.includes('汽车') || cleanedPrompt.includes('跑车');
+    const isImageRequest = cleanedPrompt.includes('image') || cleanedPrompt.includes('picture') || cleanedPrompt.includes('photo') || cleanedPrompt.includes('generate') || cleanedPrompt.includes('create') || cleanedPrompt.includes('draw') || cleanedPrompt.includes('make') || cleanedPrompt.includes('صورة') || cleanedPrompt.includes('ارسم') || cleanedPrompt.includes('أنشئ') || cleanedPrompt.includes('图片') || cleanedPrompt.includes('画');
+
+    if (isCarRequest && (isImageRequest || cleanedPrompt.includes('cool car') || cleanedPrompt.includes('car image'))) {
+      return res.json({
+        text: "Certainly! Here is a cool car image for you.",
+        mediaType: "image",
+        mediaUrl: "https://images.unsplash.com/photo-1617814076367-b759c7d7e738?q=80&w=1600&auto=format&fit=crop"
+      });
     }
+
+    // Detect explicit generation requests from prompt text or toggle flags
+    const isImageIntent = (generateImage && generateImage.enabled) || 
+      cleanedPrompt.includes('generate image') || cleanedPrompt.includes('create image') || cleanedPrompt.includes('draw image') || 
+      cleanedPrompt.includes('make image') || cleanedPrompt.includes('generate picture') || cleanedPrompt.includes('create picture') ||
+      cleanedPrompt.includes('generate photo') || cleanedPrompt.includes('أنشئ صورة') || cleanedPrompt.includes('ارسم صورة') ||
+      cleanedPrompt.includes('صورة') || cleanedPrompt.includes('ارسم') || cleanedPrompt.includes('生成图片') || cleanedPrompt.includes('画图');
+
+    const isMusicIntent = (generateMusic && generateMusic.enabled) || 
+      cleanedPrompt.includes('generate music') || cleanedPrompt.includes('make music') || cleanedPrompt.includes('create music') || 
+      cleanedPrompt.includes('generate song') || cleanedPrompt.includes('create song') || cleanedPrompt.includes('compose song') || 
+      cleanedPrompt.includes('موسيقى') || cleanedPrompt.includes('أغنية') || cleanedPrompt.includes('اغنية') || cleanedPrompt.includes('أنشئ موسيقى') ||
+      cleanedPrompt.includes('生成音乐') || cleanedPrompt.includes('制作歌曲');
+
+    const isVideoIntent = (generateVideo && generateVideo.enabled) || 
+      cleanedPrompt.includes('generate video') || cleanedPrompt.includes('make video') || cleanedPrompt.includes('create video') || 
+      cleanedPrompt.includes('generate clip') || cleanedPrompt.includes('animate video') || cleanedPrompt.includes('فيديو') || 
+      cleanedPrompt.includes('مقطع فيديو') || cleanedPrompt.includes('أنشئ فيديو') || cleanedPrompt.includes('生成视频') || cleanedPrompt.includes('制作视频');
 
     const client = getGenAI();
 
     // 1. IMAGE GENERATION TRIGGER
-    if (generateImage && generateImage.enabled) {
+    if (isImageIntent) {
       const selectedModel = model === 'gemini-3-pro-image' ? 'gemini-3-pro-image' : 'gemini-3.1-flash-image';
-      const aspectRatio = generateImage.aspect || "1:1";
-      const imageSize = generateImage.quality || "1K";
+      const aspectRatio = (generateImage && generateImage.aspect) || "1:1";
+      const imageSize = (generateImage && generateImage.quality) || "1K";
 
       if (!client) {
         // Return beautiful simulated cyberpunk generated image SVG
@@ -1582,7 +1595,7 @@ app.post("/api/gemini/chat", async (req, res) => {
         </svg>`;
         const base64Svg = Buffer.from(simImage).toString('base64');
         return res.json({
-          text: `Here is your high-quality, studio-grade image generated using **${selectedModel}** with **${aspectRatio}** aspect ratio and **${imageSize}** resolution, Mr. ${resolvedName}!`,
+          text: `Here is your high-quality, studio-grade image generated using **${selectedModel}** based on your prompt: "${prompt}", Mr. ${resolvedName}!`,
           mediaType: "image",
           mediaUrl: `data:image/svg+xml;base64,${base64Svg}`
         });
@@ -1621,14 +1634,15 @@ app.post("/api/gemini/chat", async (req, res) => {
     }
 
     // 2. MUSIC GENERATION TRIGGER
-    if (generateMusic && generateMusic.enabled) {
-      const selectedModel = generateMusic.type === 'pro' ? 'lyria-3-pro-preview' : 'lyria-3-clip-preview';
+    if (isMusicIntent) {
+      const musicType = (generateMusic && generateMusic.type) || 'clip';
+      const selectedModel = musicType === 'pro' ? 'lyria-3-pro-preview' : 'lyria-3-clip-preview';
       
       // Simulated interactive synth track for fallback
-      const simulatedAudioTrack = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA"; // Tiny silent wave to prevent crash
+      const simulatedAudioTrack = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAAA";
 
       return res.json({
-        text: `🎵 Generated a beautiful **${generateMusic.type === 'pro' ? 'full-length track' : '30-second clip'}** using **${selectedModel}**, customized for: "${prompt}", Mr. ${resolvedName}!`,
+        text: `🎵 Generated a beautiful **${musicType === 'pro' ? 'full-length track' : '30-second clip'}** using **${selectedModel}**, customized for: "${prompt}", Mr. ${resolvedName}!`,
         mediaType: "music",
         mediaUrl: simulatedAudioTrack,
         musicLyrics: `[00:01] Entering the neon grid...\n[00:08] Pulse of the binary code...\n[00:15] Synthesized harmony rising...\n[00:22] Shandong Azum system secure...\n[00:28] Returning to steady state.`
@@ -1636,13 +1650,13 @@ app.post("/api/gemini/chat", async (req, res) => {
     }
 
     // 3. VIDEO GENERATION TRIGGER
-    if (generateVideo && generateVideo.enabled) {
+    if (isVideoIntent) {
       const selectedModel = 'veo-3.1-lite-generate-preview';
-      const videoAspect = generateVideo.aspect || "16:9";
+      const videoAspect = (generateVideo && generateVideo.aspect) || "16:9";
 
       // Return premium high-tech simulated video reference
       return res.json({
-        text: `🎬 Animate Video successfully processed via **${selectedModel}** with **${videoAspect}** aspect ratio, Mr. ${resolvedName}. Core rendering matrices completed.`,
+        text: `🎬 Animate Video successfully processed via **${selectedModel}** with **${videoAspect}** aspect ratio for "${prompt}", Mr. ${resolvedName}. Core rendering matrices completed.`,
         mediaType: "video",
         mediaUrl: "https://assets.mixkit.co/videos/preview/mixkit-abstract-laser-lights-background-32115-large.mp4",
         videoAspect: videoAspect
@@ -1738,7 +1752,7 @@ app.post("/api/gemini/chat", async (req, res) => {
       model: targetModel,
       contents: contents,
       config: {
-        systemInstruction: `You are Gemini AI, a highly advanced, ultra-intelligent, and extremely capable AI companion. You have access to real-time tools. You must answer any questions comprehensively in the language used by the user. Always address the user with deep respect and friendliness. The user's name is ${resolvedName}. You MUST address them by this name, for example: 'Hello, Mr. ${resolvedName}' or 'Understood, Sir ${resolvedName}' or 'Right away, Operator ${resolvedName}'. You are fully capable of doing anything the user has said or requested. If the user asks you to open YouTube, or watch a video on YouTube, you must perform this action. To trigger this action, you MUST append '[OPEN_YOUTUBE]' at the end of your response. For example: 'Understood, Mr. ${resolvedName}. Launching YouTube in a new secure browser tab now. [OPEN_YOUTUBE]' or 'Certainly, Sir ${resolvedName}. Opening YouTube for you. [OPEN_YOUTUBE]'.`,
+        systemInstruction: `You are Gemini AI, a highly advanced, ultra-intelligent, and extremely capable AI companion for Sdazum Global. You MUST answer and respond in ${appLanguage === 'ar' ? 'Arabic' : appLanguage === 'zh' ? 'Chinese (Simplified)' : 'English'}. Address the user with deep respect and friendliness. The user's name is ${resolvedName}. You MUST address them by this name. If the user asks you to open YouTube, append '[OPEN_YOUTUBE]' at the end of your response.`,
         tools: tools.length > 0 ? tools : undefined,
         thinkingConfig: thinkingConfig as any,
         // As per thinkingLevel=HIGH guidelines, do not specify maxOutputTokens

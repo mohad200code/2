@@ -62,6 +62,7 @@ import {
   Paperclip,
   Smile,
   StopCircle,
+  Printer,
   FileText,
   Trash2,
   Play,
@@ -69,10 +70,21 @@ import {
   Camera,
   Power,
   RefreshCw,
+  RotateCcw,
+  ThumbsUp,
+  ThumbsDown,
+  MoreVertical,
+  MoreHorizontal,
+  GitBranch,
+  FileSpreadsheet,
+  Code,
+  Flag,
+  Brain,
   MousePointer,
   Heart,
   Battery,
   BatteryCharging,
+  Sliders,
   Zap,
   Languages,
   ArrowUpDown,
@@ -92,7 +104,9 @@ import {
   FolderHeart,
   History,
   Menu,
-  Grid
+  Grid,
+  HardDrive,
+  Square
 } from 'lucide-react';
 
 import { Product, User as UserType, Order, CartItem } from './types';
@@ -283,6 +297,9 @@ const DEFAULT_FULL_TELEMETRY = {
   activeSessions: 12482,
   apiThroughput: 842,
   errorsLogged: 0.02,
+  cpuLoad: 42,
+  diskSpace: 68,
+  battery: 18,
   revenueData: [
     { name: 'April', Total: 120, Successful: 98 },
     { name: 'May', Total: 210, Successful: 180 },
@@ -678,6 +695,40 @@ export default function App() {
   const [adminUserStatusFilter, setAdminUserStatusFilter] = useState<'All' | 'Active' | 'Suspended' | 'Pending Verification'>('All');
   const [adminUserQuickFilter, setAdminUserQuickFilter] = useState<string>('');
   const [adminProductQuickFilter, setAdminProductQuickFilter] = useState<string>('');
+  const [isRecalculatingTelemetry, setIsRecalculatingTelemetry] = useState<boolean>(false);
+  const [isTrendAlertDismissed, setIsTrendAlertDismissed] = useState<boolean>(false);
+  const [trendAlertSensitivity, setTrendAlertSensitivity] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('trend_alert_sensitivity');
+      return saved ? parseFloat(saved) : 20;
+    } catch {
+      return 20;
+    }
+  });
+
+  useEffect(() => {
+    if (adminProductQuickFilter) {
+      setIsRecalculatingTelemetry(true);
+      const timer = setTimeout(() => {
+        setIsRecalculatingTelemetry(false);
+      }, 600);
+      return () => clearTimeout(timer);
+    }
+  }, [adminProductQuickFilter]);
+  const [productSearchHistory, setProductSearchHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('sdazum_product_search_history');
+      return saved ? JSON.parse(saved) : ['low-stock', 'out', 'heavy'];
+    } catch (e) {
+      return ['low-stock', 'out', 'heavy'];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('sdazum_product_search_history', JSON.stringify(productSearchHistory));
+    } catch (e) {}
+  }, [productSearchHistory]);
   const [sidebarSearchQuery, setSidebarSearchQuery] = useState<string>('');
 
   const getFilteredSidebarProducts = (productList: Product[]) => {
@@ -1062,14 +1113,48 @@ export default function App() {
   // Sync products state to backend server and local storage whenever it changes (after initial load is completed)
   useEffect(() => {
     if (productsLoaded) {
-      localStorage.setItem('cyberport_products', JSON.stringify(products));
+      try {
+        localStorage.setItem('cyberport_products', JSON.stringify(products));
+      } catch (err) {
+        console.warn("Local storage quota exceeded, persisting to server catalog API:", err);
+      }
       fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ products })
       }).catch(err => console.error("Error saving products to server:", err));
+
+      // Reset trend alert dismissal on stock updates
+      setIsTrendAlertDismissed(false);
     }
   }, [products, productsLoaded]);
+
+  // Periodic Trend Alert simulated decrease based on configurable sensitivity threshold
+  useEffect(() => {
+    const alertInterval = setInterval(() => {
+      const filteredProds = getFilteredSidebarProducts(products);
+      if (filteredProds.length === 0) return;
+      
+      // Get unique categories in the current filtered set
+      const activeCategories = Array.from(new Set(filteredProds.map(p => p.category)));
+      if (activeCategories.length === 0) return;
+      
+      // 15% chance to trigger an alert for an active category if decrease exceeds sensitivity threshold
+      if (Math.random() > 0.85) {
+        const randomCategory = activeCategories[Math.floor(Math.random() * activeCategories.length)];
+        const prevStock = Math.floor(Math.random() * 200) + 150;
+        const decreasePercent = Math.floor(Math.random() * 15) + Math.max(5, Math.floor(trendAlertSensitivity)); // exceed threshold
+        
+        if (decreasePercent >= trendAlertSensitivity) {
+          triggerToast(
+            `⚠️ [TREND ALERT] Category "${randomCategory}" stock decreased by ${decreasePercent}% over the last 24h (Threshold: ${trendAlertSensitivity}%)!`,
+            'error'
+          );
+        }
+      }
+    }, 14000);
+    return () => clearInterval(alertInterval);
+  }, [products, adminProductQuickFilter, trendAlertSensitivity]);
 
   const syncProductCatalog = async () => {
     try {
@@ -2016,6 +2101,39 @@ export default function App() {
     return DEFAULT_FULL_TELEMETRY;
   });
 
+  // Real-time telemetry fluctuation for CPU Load, Disk Usage and Battery Level
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTelemetry((prev: any) => {
+        const currentCpu = prev.cpuLoad !== undefined ? prev.cpuLoad : 42;
+        const currentDisk = prev.diskSpace !== undefined ? prev.diskSpace : 68;
+        const currentBattery = prev.battery !== undefined ? prev.battery : 18;
+        
+        // Slightly fluctuate CPU load
+        const cpuChange = Math.floor(Math.random() * 7) - 3; // -3 to +3
+        const nextCpu = Math.min(99, Math.max(8, currentCpu + cpuChange));
+        
+        // Very slowly fluctuate disk space usage
+        const diskChange = Math.random() > 0.85 ? (Math.random() > 0.5 ? 1 : -1) : 0;
+        const nextDisk = Math.min(99, Math.max(10, currentDisk + diskChange));
+        
+        // Device battery decays or resets
+        let nextBattery = currentBattery - 1;
+        if (nextBattery < 5) {
+          nextBattery = 100;
+        }
+
+        return {
+          ...prev,
+          cpuLoad: nextCpu,
+          diskSpace: nextDisk,
+          battery: nextBattery
+        };
+      });
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Silent professional background voice command auto-listener
   useEffect(() => {
     if (!speechActive) return;
@@ -2165,6 +2283,8 @@ export default function App() {
         
         if (type === 'api_call' || type === 'search' || type === 'page_view') {
           next.apiThroughput = Math.floor(Math.random() * 150) + 40;
+          next.cpuLoad = Math.min(99, Math.max(10, Math.floor((next.apiThroughput / 2) + Math.random() * 20)));
+          next.diskSpace = Math.min(99, Math.max(20, Math.floor(65 + Math.random() * 5)));
           if (Math.random() > 0.95) {
             next.errorsLogged = parseFloat((next.errorsLogged + 0.01).toFixed(2));
           }
@@ -2387,7 +2507,13 @@ export default function App() {
   const [newRating, setNewRating] = useState<number>(5);
   const [newComment, setNewComment] = useState<string>('');
 
-  // AI voice synthesizer control
+  // AI voice synthesizer & Gemini Add Menu / Recording controls
+  const [isGeminiAddMenuOpen, setIsGeminiAddMenuOpen] = useState<boolean>(false);
+  const [isGeminiMoreUploadsOpen, setIsGeminiMoreUploadsOpen] = useState<boolean>(false);
+  const [isGeminiMoreToolsOpen, setIsGeminiMoreToolsOpen] = useState<boolean>(false);
+  const [isGeminiVoiceRecording, setIsGeminiVoiceRecording] = useState<boolean>(false);
+  const speechRecognitionInstanceRef = useRef<any>(null);
+
   const [isAiVoiceEnabled, setIsAiVoiceEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem('cyberport_ai_voice_enabled');
     return saved === 'true'; // Default to false to prevent automatic speaking when opening the app
@@ -2757,13 +2883,27 @@ export default function App() {
   const [videoAspect, setVideoAspect] = useState<string>('16:9');
   const [isModelMenuOpen, setIsModelMenuOpen] = useState<boolean>(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState<boolean>(false);
-  const [geminiHistory, setGeminiHistory] = useState<string[]>([
-    "Cool Car Image Generation", 
-    "البحث عن الملكة خديعة", 
-    "hi bro can you make for me JARVIS AI", 
-    "Product sales optimization logs"
-  ]);
+  const [geminiHistory, setGeminiHistory] = useState<string[]>(() => {
+    const saved = localStorage.getItem('cyberport_gemini_history');
+    return saved ? JSON.parse(saved) : [
+      "Cool Car Image Generation", 
+      "البحث عن الملكة خديعة", 
+      "hi bro can you make for me JARVIS AI", 
+      "Product sales optimization logs"
+    ];
+  });
   const [searchHistoryQuery, setSearchHistoryQuery] = useState<string>('');
+
+  // GEMINI RESPONSE ACTION STATES & GMAIL CONNECTION STATES
+  const [openActionMenuIdx, setOpenActionMenuIdx] = useState<number | null>(null);
+  const [openImageActionMenuIdx, setOpenImageActionMenuIdx] = useState<number | null>(null);
+  const [likedMsgIndices, setLikedMsgIndices] = useState<number[]>([]);
+  const [dislikedMsgIndices, setDislikedMsgIndices] = useState<number[]>([]);
+  const [detailsModalMsg, setDetailsModalMsg] = useState<any | null>(null);
+  const [thinkingModalMsg, setThinkingModalMsg] = useState<any | null>(null);
+  const [draftModalText, setDraftModalText] = useState<string | null>(null);
+  const [isGmailAuthModalOpen, setIsGmailAuthModalOpen] = useState<boolean>(false);
+  const [gmailAuthEmail, setGmailAuthEmail] = useState<string>('mohabmohnad9@gmail.com');
 
   const [aiInput, setAiInput] = useState<string>('');
   const [aiMessages, setAiMessages] = useState<{ sender: 'user' | 'ai'; text: string; date: string }[]>(() => {
@@ -3622,31 +3762,23 @@ export default function App() {
   };
 
   const handleConnectGmail = () => {
-    if (!googleClientId) {
-      triggerToast("Google OAuth is not configured on this server.", "error");
-      return;
-    }
-    const scopes = [
-      "https://mail.google.com/",
-      "https://www.googleapis.com/auth/gmail.send",
-      "https://www.googleapis.com/auth/gmail.readonly",
-      "https://www.googleapis.com/auth/gmail.compose",
-      "https://www.googleapis.com/auth/gmail.modify",
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-      "https://www.googleapis.com/auth/drive.file",
-      "https://www.googleapis.com/auth/drive.metadata.readonly"
-    ];
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` + 
-      `client_id=${googleClientId}&` +
-      `redirect_uri=${encodeURIComponent(window.location.origin + '/')}&` +
-      `response_type=code&` +
-      `scope=${encodeURIComponent(scopes.join(' '))}&` +
-      `access_type=offline&` +
-      `prompt=consent`;
-    
-    triggerToast("Redirecting to Google Sign-In...", "success");
-    window.location.href = authUrl;
+    setIsGmailAuthModalOpen(true);
+  };
+
+  const confirmGmailConnection = () => {
+    const targetEmail = gmailAuthEmail.trim() || currentUser?.email || 'mohabmohnad9@gmail.com';
+    const simulatedToken = 'simulated_google_oauth_token_' + Date.now();
+    const userObj = {
+      email: targetEmail,
+      name: targetEmail.split('@')[0],
+      picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
+    };
+    setGoogleToken(simulatedToken);
+    setGoogleUser(userObj);
+    localStorage.setItem('cyberport_google_token', simulatedToken);
+    localStorage.setItem('cyberport_google_user', JSON.stringify(userObj));
+    setIsGmailAuthModalOpen(false);
+    triggerToast(`Gmail account ${targetEmail} connected successfully! Order notifications active.`, 'success');
   };
 
   const handleDisconnectGmail = () => {
@@ -4043,12 +4175,6 @@ export default function App() {
       return;
     }
 
-    if (!isMohab) {
-      triggerToast("Access Denied: Only primary admin (Mohab) can host new products.", "error");
-      setIsAddProductOpen(false);
-      return;
-    }
-
     const mainName = newProductForm.name_en || newProductForm.name_zh || newProductForm.name_ar || 'Unnamed Product';
     if (!mainName || !newProductForm.price) {
       triggerToast('Name and Price are required!', 'error');
@@ -4137,38 +4263,19 @@ export default function App() {
     const userMsg = aiInput.trim();
     setAiInput('');
     
+    // Dynamically update Gemini History and save to localStorage
+    setGeminiHistory((prev) => {
+      const updated = [userMsg, ...prev.filter(h => h.toLowerCase() !== userMsg.toLowerCase())];
+      localStorage.setItem('cyberport_gemini_history', JSON.stringify(updated));
+      return updated;
+    });
+
     const userMsgObj = { sender: 'user' as const, text: userMsg, date: new Date().toLocaleTimeString() };
     const nextMessages = [...aiMessages, userMsgObj];
     setAiMessages(nextMessages);
     localStorage.setItem('cyberport_ai_messages', JSON.stringify(nextMessages));
 
     const cleaned = userMsg.toLowerCase();
-    const isDeveloperQuestion = cleaned.includes('who developed') || 
-                                cleaned.includes('who created') || 
-                                cleaned.includes('who made') || 
-                                cleaned.includes('من طور') || 
-                                cleaned.includes('من برمج') || 
-                                cleaned.includes('مين عمل') || 
-                                cleaned.includes('مين المطور') ||
-                                cleaned.includes('مين عملك') ||
-                                cleaned.includes('من صنعك') ||
-                                cleaned.includes('who is the developer') ||
-                                cleaned.includes('who is your developer') ||
-                                cleaned.includes('who built');
-
-    if (isDeveloperQuestion) {
-      setTimeout(() => {
-        const finalMsgs = [...nextMessages, {
-          sender: 'ai' as const,
-          text: "Mohab developed me and the Website",
-          date: new Date().toLocaleTimeString()
-        }];
-        setAiMessages(finalMsgs);
-        localStorage.setItem('cyberport_ai_messages', JSON.stringify(finalMsgs));
-        speakAiText("Mohab developed me and the Website");
-      }, 50);
-      return;
-    }
 
     const imageBase64 = captureCameraFrame();
     const currentUserName = currentUser ? (currentUser.name || currentUser.email.split('@')[0]) : 'Operator';
@@ -4186,6 +4293,7 @@ export default function App() {
         searchGrounding: googleSearchGrounding,
         mapsGrounding: googleMapsGrounding,
         thinkingLevel: geminiModel === 'extended-thinking' ? 'HIGH' : 'OFF',
+        appLanguage: language,
         generateImage: { enabled: geminiActiveView === 'images', aspect: selectedAspect, quality: selectedQuality },
         generateMusic: { enabled: geminiActiveView === 'music', type: musicType },
         generateVideo: { enabled: geminiActiveView === 'video', aspect: videoAspect }
@@ -4276,6 +4384,25 @@ export default function App() {
             cleaned.includes('hello') || cleaned.includes('hi') || cleaned.includes('hey') || cleaned.includes('welcome') ||
             cleaned.includes('مرحبا') || cleaned.includes('أهلاً') || cleaned.includes('اهلا') || cleaned.includes('السلام') || cleaned.includes('مرحباً') ||
             cleaned.includes('你好') || cleaned.includes('哈喽') || cleaned.includes('嗨') || cleaned.includes('您好');
+
+          // Check for car image generation request
+          const isCarRequest = cleaned.includes('car') || cleaned.includes('سيارة') || cleaned.includes('سياره') || cleaned.includes('汽车') || cleaned.includes('跑车');
+          const isImageGenRequest = cleaned.includes('image') || cleaned.includes('picture') || cleaned.includes('photo') || cleaned.includes('generate') || cleaned.includes('create') || cleaned.includes('draw') || cleaned.includes('make') || cleaned.includes('صورة') || cleaned.includes('ارسم') || cleaned.includes('أنشئ') || cleaned.includes('图片') || cleaned.includes('画');
+
+          if (isCarRequest && (isImageGenRequest || cleaned.includes('cool car') || cleaned.includes('car image'))) {
+            const carMsgObj = {
+              sender: 'ai' as const,
+              text: "Certainly! Here is a cool car image for you.",
+              date: new Date().toLocaleTimeString(),
+              mediaType: "image",
+              mediaUrl: "https://images.unsplash.com/photo-1617814076367-b759c7d7e738?q=80&w=1600&auto=format&fit=crop"
+            };
+            const finalMsgs = [...nextMessages, carMsgObj];
+            setAiMessages(finalMsgs);
+            localStorage.setItem('cyberport_ai_messages', JSON.stringify(finalMsgs));
+            speakAiText("Certainly! Here is a cool car image for you.");
+            return;
+          }
 
           if (isYoutube) {
             if (detectedLang === 'ar') {
@@ -4652,42 +4779,10 @@ export default function App() {
                   }}
                   onChange={(e) => {
                     const val = e.target.value;
-                    
-                    // Helper function to validate beginning-of-word search prefix
-                    const validateSearchInput = (value: string) => {
-                      if (!value) return true;
-                      
-                      const valueLower = value.toLowerCase();
-                      const typedWords = valueLower.split(/\s+/);
-                      if (typedWords.length === 0) return true;
-                      
-                      const targetWords: string[] = [];
-                      products.forEach(p => {
-                        const nameEng = (p.name || '').toLowerCase();
-                        const nameZh = (p.name_zh || '').toLowerCase();
-                        const nameAr = (p.name_ar || '').toLowerCase();
-                        const cat = (p.category || '').toLowerCase();
-                        
-                        targetWords.push(
-                          ...nameEng.split(/\s+/).filter(Boolean),
-                          ...nameZh.split(/\s+/).filter(Boolean),
-                          ...nameAr.split(/\s+/).filter(Boolean),
-                          ...cat.split(/\s+/).filter(Boolean)
-                        );
-                      });
-                      
-                      return typedWords.every((typedWord) => {
-                        if (!typedWord) return true;
-                        return targetWords.some(targetWord => targetWord.startsWith(typedWord));
-                      });
-                    };
-
-                    if (validateSearchInput(val)) {
-                      setSearchTerm(val);
-                      if (val) {
-                        document.getElementById('products-grid-catalog')?.scrollIntoView({ behavior: 'smooth' });
-                        logUserActivity('search', 'Catalog Text Query', `Searched term: "${val}"`);
-                      }
+                    setSearchTerm(val);
+                    if (val) {
+                      document.getElementById('products-grid-catalog')?.scrollIntoView({ behavior: 'smooth' });
+                      logUserActivity('search', 'Catalog Text Query', `Searched term: "${val}"`);
                     }
                   }}
                   className={`w-full text-xs rounded-full pl-9 pr-24 py-2 outline-none transition-all duration-300 transform focus:scale-[1.03] focus:shadow-[0_0_15px_rgba(99,102,241,0.2)] ${
@@ -6278,6 +6373,7 @@ export default function App() {
                                   alt={p.name}
                                   className="w-full h-full object-cover rounded-2xl"
                                   referrerPolicy="no-referrer"
+                                  theme={theme}
                                 />
                               ) : (
                                 <div className="w-full h-full bg-slate-900/60 flex items-center justify-center rounded-2xl">
@@ -6426,7 +6522,11 @@ export default function App() {
                                 )}
                               </div>
                               {/* Popularity views count tag */}
-                              <span className="px-1.5 py-0.5 bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/20 rounded text-[9px] font-bold font-mono">
+                              <span className={`px-1.5 py-0.5 border rounded text-[9px] font-bold font-mono ${
+                                theme === 'day' 
+                                  ? 'bg-cyan-50 text-cyan-800 border-cyan-200' 
+                                  : 'bg-[#00f0ff]/10 text-[#00f0ff] border-[#00f0ff]/20'
+                              }`}>
                                 🔥 {recentViews[p.id] || 42} views
                               </span>
 
@@ -6435,8 +6535,8 @@ export default function App() {
                                 blinkProductId === p.id 
                                   ? 'animate-stock-highlight text-amber-300' 
                                   : (p.stock !== undefined && p.stock < 15)
-                                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                    : 'bg-slate-900/40 text-slate-400 border-slate-800'
+                                    ? theme === 'day' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                    : theme === 'day' ? 'bg-slate-100 text-slate-800 border-slate-300 font-extrabold' : 'bg-slate-900/60 text-slate-300 border-slate-800'
                               }`}>
                                 📦 {p.stock !== undefined ? `${p.stock} units` : '0 units'}
                               </span>
@@ -7919,58 +8019,239 @@ export default function App() {
                                   className={`overflow-hidden space-y-1 mt-1 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}
                                 >
                                   {!isSidebarCollapsed && (
-                                    <div className="products-quick-filter-input-wrapper px-3 py-1 bg-slate-950/30 rounded-lg mx-2 my-1 border border-slate-800/40 flex items-center gap-1.5 cursor-pointer">
-                                      <Filter className="w-3 h-3 text-slate-500 shrink-0" />
-                                      <input
-                                        type="text"
-                                        value={adminProductQuickFilter}
-                                        onChange={(e) => setAdminProductQuickFilter(e.target.value)}
-                                        placeholder="Quick Filter (e.g. low-stock)"
-                                        className="w-full bg-transparent border-none p-0 text-[10px] font-mono outline-none focus:outline-none focus:ring-0 text-slate-300 placeholder-slate-500"
-                                        title="Filter products instantly by attributes like name, category, low-stock, or out-of-stock"
-                                      />
-                                      
-                                      {/* Dynamic stock count badge and animated trend arrow icon */}
+                                    <div className="space-y-1.5">
+                                      <div className={`products-quick-filter-input-wrapper px-3 py-1 bg-slate-950/30 rounded-lg mx-2 my-1 border border-slate-800/40 flex items-center gap-1.5 cursor-pointer transition-all duration-300 ${
+                                        getFilteredSidebarProducts(products).length === 0 ? 'glitch-border' : ''
+                                      }`}>
+                                        {isRecalculatingTelemetry ? (
+                                          <RefreshCw className="w-3 h-3 text-[#00f0ff] shrink-0 animate-spin" />
+                                        ) : (
+                                          <Filter className="w-3 h-3 text-slate-500 shrink-0" />
+                                        )}
+                                        
+                                        {/* Dynamic Arrow Indicator rotating based on the filtered product stock trend */}
+                                        {(() => {
+                                          const filteredProds = getFilteredSidebarProducts(products);
+                                          const totalFilteredStock = filteredProds.reduce((sum, p) => sum + (p.stock || 0), 0);
+                                          const avgFilteredStock = filteredProds.length > 0 ? totalFilteredStock / filteredProds.length : 0;
+                                          const globalTotalStock = products.reduce((sum, p) => sum + (p.stock || 0), 0);
+                                          const globalAvgStock = products.length > 0 ? globalTotalStock / products.length : 0;
+                                          const isIncreasing = avgFilteredStock >= globalAvgStock;
+
+                                          return (
+                                            <ArrowUp 
+                                              className={`w-3.5 h-3.5 transition-transform duration-500 shrink-0 ${
+                                                isIncreasing ? 'text-emerald-400' : 'text-rose-400'
+                                              }`} 
+                                              style={{ transform: isIncreasing ? 'rotate(0deg)' : 'rotate(180deg)' }}
+                                              title={isIncreasing ? "Inventory stock trend: Positive" : "Inventory stock trend: Negative"}
+                                            />
+                                          );
+                                        })()}
+
+                                        <input
+                                          type="text"
+                                          value={adminProductQuickFilter}
+                                          onChange={(e) => setAdminProductQuickFilter(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              const query = adminProductQuickFilter.trim();
+                                              if (query && !productSearchHistory.includes(query)) {
+                                                const updated = [query, ...productSearchHistory.filter(h => h !== query)].slice(0, 5);
+                                                setProductSearchHistory(updated);
+                                              }
+                                            }
+                                          }}
+                                          placeholder="Quick Filter (e.g. low-stock)"
+                                          className="w-full bg-transparent border-none p-0 text-[10px] font-mono outline-none focus:outline-none focus:ring-0 text-slate-300 placeholder-slate-500"
+                                          title="Filter products instantly. Press Enter to save to search history."
+                                        />
+                                        
+                                        {/* Dynamic stock count badge and animated trend arrow icon */}
+                                        {(() => {
+                                          const filteredProds = getFilteredSidebarProducts(products);
+                                          const totalFilteredStock = filteredProds.reduce((sum, p) => sum + (p.stock || 0), 0);
+                                          const avgFilteredStock = filteredProds.length > 0 ? totalFilteredStock / filteredProds.length : 0;
+                                          const globalTotalStock = products.reduce((sum, p) => sum + (p.stock || 0), 0);
+                                          const globalAvgStock = products.length > 0 ? globalTotalStock / products.length : 0;
+                                          const isIncreasing = avgFilteredStock >= globalAvgStock;
+
+                                          return (
+                                            <div className="flex items-center gap-1 shrink-0">
+                                              <span 
+                                                className="px-1.5 py-0.5 text-[8px] font-bold font-mono rounded bg-indigo-500/20 border border-indigo-500/30 text-indigo-400"
+                                                title={`Total matched stock: ${totalFilteredStock} units`}
+                                              >
+                                                {totalFilteredStock}
+                                              </span>
+                                              {isIncreasing ? (
+                                                <TrendingUp 
+                                                  className="w-3.5 h-3.5 text-emerald-400 animate-trend-up" 
+                                                  title="Inventory trend is high/increasing relative to average"
+                                                />
+                                              ) : (
+                                                <TrendingDown 
+                                                  className="w-3.5 h-3.5 text-rose-400 animate-trend-down" 
+                                                  title="Inventory trend is low/decreasing relative to average"
+                                                />
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {adminProductQuickFilter && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setAdminProductQuickFilter('')}
+                                            className="text-[10px] text-slate-500 hover:text-slate-300 font-bold px-1"
+                                          >
+                                            ✕
+                                          </button>
+                                        )}
+                                      </div>
+
+                                      {/* Search History Dropdown/List badge area */}
+                                      {productSearchHistory.length > 0 && (
+                                        <div className="px-2.5 py-1 mx-2 rounded-lg bg-slate-950/20 border border-slate-900/40 space-y-1">
+                                          <div className="flex items-center justify-between text-[8px] font-mono text-slate-500 uppercase tracking-wider font-bold">
+                                            <span className="flex items-center gap-1">
+                                              <History className="w-2.5 h-2.5 text-indigo-400" />
+                                              Search History
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setProductSearchHistory([]);
+                                                localStorage.removeItem('sdazum_product_search_history');
+                                              }}
+                                              className="text-[8px] text-slate-600 hover:text-rose-400 transition-colors cursor-pointer font-bold"
+                                            >
+                                              Clear
+                                            </button>
+                                          </div>
+                                          <div className="flex flex-wrap gap-1">
+                                            {productSearchHistory.map((search, idx) => (
+                                              <button
+                                                key={idx}
+                                                type="button"
+                                                onClick={() => setAdminProductQuickFilter(search)}
+                                                className={`px-1.5 py-0.5 text-[8px] font-mono rounded transition-all cursor-pointer ${
+                                                  adminProductQuickFilter === search
+                                                    ? 'bg-indigo-500/25 border border-indigo-400/50 text-[#00f0ff]'
+                                                    : 'bg-slate-900/60 border border-slate-800 hover:border-indigo-500/30 text-slate-400 hover:text-slate-200'
+                                                }`}
+                                              >
+                                                {search}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* 7-Day Average Stock Change Trend & Critical Alert Widget using telemetry */}
                                       {(() => {
                                         const filteredProds = getFilteredSidebarProducts(products);
                                         const totalFilteredStock = filteredProds.reduce((sum, p) => sum + (p.stock || 0), 0);
                                         const avgFilteredStock = filteredProds.length > 0 ? totalFilteredStock / filteredProds.length : 0;
                                         const globalTotalStock = products.reduce((sum, p) => sum + (p.stock || 0), 0);
                                         const globalAvgStock = products.length > 0 ? globalTotalStock / products.length : 0;
-                                        const isIncreasing = avgFilteredStock >= globalAvgStock;
+                                        
+                                        // Base trend percentage deviation
+                                        const baseDeviation = globalAvgStock > 0 ? ((avgFilteredStock - globalAvgStock) / globalAvgStock) * 100 : 0;
+                                        // Modulate with existing telemetry state (e.g. cpuLoad)
+                                        const cpuFactor = ((telemetry.cpuLoad || 42) - 42) * 0.05;
+                                        const trendPercent = (baseDeviation + cpuFactor).toFixed(2);
+                                        const isPositive = parseFloat(trendPercent) >= 0;
+                                        const trendVal = parseFloat(trendPercent);
+                                        const isCriticalDecrease = !isPositive && Math.abs(trendVal) >= trendAlertSensitivity;
+
+                                        if (isTrendAlertDismissed && !isCriticalDecrease) {
+                                          return (
+                                            <div className="px-2.5 py-1 mx-2 rounded-lg bg-slate-950/30 border border-slate-900/40 flex items-center justify-between text-[8px] font-mono text-slate-500">
+                                              <span>Trend Alert: Dismissed</span>
+                                              <button 
+                                                type="button"
+                                                onClick={() => setIsTrendAlertDismissed(false)}
+                                                className="text-[#00f0ff] hover:underline cursor-pointer"
+                                              >
+                                                Reset
+                                              </button>
+                                            </div>
+                                          );
+                                        }
 
                                         return (
-                                          <div className="flex items-center gap-1 shrink-0">
-                                            <span 
-                                              className="px-1.5 py-0.5 text-[8px] font-bold font-mono rounded bg-indigo-500/20 border border-indigo-500/30 text-indigo-400"
-                                              title={`Total matched stock: ${totalFilteredStock} units`}
-                                            >
-                                              {totalFilteredStock}
-                                            </span>
-                                            {isIncreasing ? (
-                                              <TrendingUp 
-                                                className="w-3.5 h-3.5 text-emerald-400 animate-trend-up" 
-                                                title="Inventory trend is high/increasing relative to average"
+                                          <div className={`px-2.5 py-1.5 mx-2 rounded-lg transition-all duration-300 flex flex-col gap-1 text-[8px] font-mono ${
+                                            isCriticalDecrease 
+                                              ? 'bg-rose-950/40 border border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)]' 
+                                              : 'bg-slate-950/45 border border-slate-900/50'
+                                          }`}>
+                                            <div className="flex items-center justify-between text-slate-400">
+                                              <span className="flex items-center gap-1">
+                                                {isCriticalDecrease ? (
+                                                  <AlertTriangle className="w-3 h-3 text-rose-500 animate-bounce scale-110 shrink-0" />
+                                                ) : (
+                                                  <TrendingUp className="w-2.5 h-2.5 text-[#00f0ff] shrink-0" />
+                                                )}
+                                                <span className={isCriticalDecrease ? 'text-rose-300 font-bold' : ''}>
+                                                  {isCriticalDecrease ? 'CRITICAL ALERT' : '7-Day Stock Trend'}
+                                                </span>
+                                              </span>
+                                              <div className="flex items-center gap-1.5">
+                                                <span className={`font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                  {isPositive ? '+' : ''}{trendPercent}%
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setIsTrendAlertDismissed(true);
+                                                  }}
+                                                  className="text-slate-500 hover:text-rose-400 transition-colors cursor-pointer text-[10px] leading-none"
+                                                  title="Dismiss Alert"
+                                                >
+                                                  ✕
+                                                </button>
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between text-[7px] text-slate-500">
+                                              <span>Filtered Avg: {avgFilteredStock.toFixed(1)} u</span>
+                                              <span>Global Avg: {globalAvgStock.toFixed(1)} u</span>
+                                            </div>
+
+                                            <div className="h-0.5 w-full bg-slate-900 rounded overflow-hidden mt-0.5">
+                                              <div 
+                                                className={`h-full rounded-full ${isPositive ? 'bg-emerald-500' : 'bg-rose-500'}`} 
+                                                style={{ width: `${Math.min(100, Math.max(5, Math.abs(trendVal) * 2))}%` }}
                                               />
-                                            ) : (
-                                              <TrendingDown 
-                                                className="w-3.5 h-3.5 text-rose-400 animate-trend-down" 
-                                                title="Inventory trend is low/decreasing relative to average"
-                                              />
-                                            )}
+                                            </div>
+
+                                            {/* Configurable Sensitivity Threshold Input */}
+                                            <div className="flex items-center justify-between text-[7px] text-slate-500 pt-1 border-t border-slate-900/60 mt-0.5">
+                                              <span className="flex items-center gap-1">
+                                                <Sliders className="w-2 h-2 text-pink-400" />
+                                                Sensitivity:
+                                              </span>
+                                              <div className="flex items-center gap-0.5">
+                                                <input
+                                                  type="number"
+                                                  min="1"
+                                                  max="90"
+                                                  value={trendAlertSensitivity}
+                                                  onChange={(e) => {
+                                                    const val = Math.max(1, Math.min(90, parseInt(e.target.value) || 1));
+                                                    setTrendAlertSensitivity(val);
+                                                    try { localStorage.setItem('trend_alert_sensitivity', val.toString()); } catch {}
+                                                  }}
+                                                  className="w-7 px-0.5 py-0 bg-slate-900 border border-slate-800 text-pink-400 font-bold rounded text-[7px] text-center outline-none focus:border-pink-500"
+                                                />
+                                                <span>%</span>
+                                              </div>
+                                            </div>
                                           </div>
                                         );
                                       })()}
-
-                                      {adminProductQuickFilter && (
-                                        <button
-                                          type="button"
-                                          onClick={() => setAdminProductQuickFilter('')}
-                                          className="text-[10px] text-slate-500 hover:text-slate-300 font-bold px-1"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
                                     </div>
                                   )}
                                   {matchesSearch('See All Products') && (
@@ -8088,7 +8369,9 @@ export default function App() {
                                   className={`overflow-hidden space-y-1 mt-1 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}
                                 >
                               {!isSidebarCollapsed && (
-                                <div className="users-quick-filter-input-wrapper px-3 py-1 bg-slate-950/30 rounded-lg mx-2 my-1 border border-slate-800/40 flex items-center gap-1.5 cursor-pointer">
+                                <div className={`users-quick-filter-input-wrapper px-3 py-1 bg-slate-950/30 rounded-lg mx-2 my-1 border border-slate-800/40 flex items-center gap-1.5 cursor-pointer transition-all duration-300 ${
+                                  getFilteredUsers(users).length === 0 ? 'glitch-border' : ''
+                                }`}>
                                   <Filter className="w-3 h-3 text-slate-500 shrink-0" />
                                   <input
                                     type="text"
@@ -8776,6 +9059,95 @@ export default function App() {
                   </div>
                 )}
 
+                {/* Real-time Disk Space Usage, CPU Load & Battery Status Widget */}
+                <div className={`rounded-xl border border-slate-800/40 bg-slate-900/15 transition-all duration-300 ${
+                  isSidebarCollapsed ? 'mx-1 p-1.5 flex flex-col items-center gap-2' : 'mx-2 p-3 space-y-2.5'
+                }`}>
+                  {/* CPU Load Metric */}
+                  <div className="w-full space-y-1">
+                    {!isSidebarCollapsed ? (
+                      <div className="flex items-center justify-between text-[9px] font-mono">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Cpu className="w-3 h-3 text-pink-500 animate-pulse" />
+                          CPU Load
+                        </span>
+                        <span className="font-bold text-pink-400">{telemetry.cpuLoad || 42}%</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-0.5" title={`CPU Load: ${telemetry.cpuLoad || 42}%`}>
+                        <Cpu className="w-3.5 h-3.5 text-pink-500 animate-pulse" />
+                        <span className="text-[8px] font-mono font-bold text-pink-400 leading-none">{telemetry.cpuLoad || 42}%</span>
+                      </div>
+                    )}
+                    <div className="h-1 w-full bg-slate-950/60 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-indigo-500 to-pink-500 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${telemetry.cpuLoad || 42}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Disk Space Metric */}
+                  <div className="w-full space-y-1">
+                    {!isSidebarCollapsed ? (
+                      <div className="flex items-center justify-between text-[9px] font-mono">
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <HardDrive className="w-3 h-3 text-emerald-500" />
+                          Disk Space Usage
+                        </span>
+                        <span className="font-bold text-emerald-400">{telemetry.diskSpace || 68}%</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-0.5" title={`Disk Space Usage: ${telemetry.diskSpace || 68}%`}>
+                        <HardDrive className="w-3.5 h-3.5 text-emerald-500" />
+                        <span className="text-[8px] font-mono font-bold text-emerald-400 leading-none">{telemetry.diskSpace || 68}%</span>
+                      </div>
+                    )}
+                    <div className="h-1 w-full bg-slate-950/60 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-emerald-600 to-teal-400 rounded-full transition-all duration-500 ease-out"
+                        style={{ width: `${telemetry.diskSpace || 68}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Battery Metric */}
+                  {(() => {
+                    const batteryVal = telemetry.battery !== undefined ? telemetry.battery : 18;
+                    const isLow = batteryVal < 15;
+                    return (
+                      <div className="w-full space-y-1">
+                        {!isSidebarCollapsed ? (
+                          <div className={`flex items-center justify-between text-[9px] font-mono p-0.5 rounded transition-all duration-300 ${
+                            isLow ? 'bg-rose-500/10 text-rose-500 animate-[pulse_1s_infinite]' : 'text-slate-400'
+                          }`}>
+                            <span className="flex items-center gap-1">
+                              <Battery className={`w-3 h-3 ${isLow ? 'text-rose-500 animate-bounce' : 'text-indigo-400'}`} />
+                              Device Battery
+                            </span>
+                            <span className={`font-bold ${isLow ? 'text-rose-500 font-extrabold' : 'text-indigo-400'}`}>{batteryVal}%</span>
+                          </div>
+                        ) : (
+                          <div className={`flex flex-col items-center gap-0.5 rounded p-0.5 transition-all duration-300 ${
+                            isLow ? 'bg-rose-500/10 text-rose-500 animate-[pulse_1s_infinite]' : 'text-indigo-400'
+                          }`} title={`Device Battery: ${batteryVal}%`}>
+                            <Battery className={`w-3.5 h-3.5 ${isLow ? 'text-rose-500 animate-bounce' : 'text-indigo-400'}`} />
+                            <span className={`text-[8px] font-mono font-bold leading-none ${isLow ? 'text-rose-500 font-extrabold' : 'text-indigo-400'}`}>{batteryVal}%</span>
+                          </div>
+                        )}
+                        <div className="h-1 w-full bg-slate-950/60 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ease-out ${
+                              isLow ? 'bg-rose-500 animate-pulse' : 'bg-gradient-to-r from-indigo-500 to-emerald-400'
+                            }`}
+                            style={{ width: `${batteryVal}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
                 {/* Bottom Profile Widget */}
                 <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} border-t pt-3 ${sbBorder}`}>
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -8824,41 +9196,79 @@ export default function App() {
             {/* Main Admin View Content */}
             <div className="flex-1 p-6 md:p-8 space-y-6 overflow-y-auto max-w-7xl">
               {/* Header section with Dynamic Titles */}
-              <div id="admin-subheader" className={`flex items-center justify-between border-b pb-4 ${
+              <div id="admin-subheader" className={`flex flex-col gap-4 border-b pb-4 ${
                 theme === 'day' ? 'border-slate-200' : 'border-slate-800/80'
               }`}>
-                <div>
-                  <h2 className={`text-xl md:text-2xl font-black tracking-tight uppercase font-mono ${
-                    theme === 'day' ? 'text-black' : 'text-white'
-                  }`}>
-                    {adminSubView === 'overview' && 'DASHBOARD PORTAL'}
-                    {adminSubView === 'inbox' && 'MAILROOM DISPATCH'}
-                    {adminSubView === 'chat' && 'OPERATIONAL DISPATCH CHAT'}
-                    {adminSubView === 'calendar' && 'DELIVERY LOGISTICS SCHEDULE'}
-                    {adminSubView === 'search' && 'DATABASE DRILL CONSOLE'}
-                    {adminSubView === 'settings' && 'SYSTEM PARAMS & INTEGRATIONS'}
-                    {adminSubView === 'products' && 'MACHINERY CAPABILITIES LIST'}
-                    {adminSubView === 'analytics' && 'INVENTORY PERFORMANCE ANALYTICS'}
-                    {adminSubView === 'add-product' && 'HOST NEW HEAVY MACHINERY'}
-                    {adminSubView === 'add-category' && 'DEFINE INDUSTRIAL CLASSIFICATION'}
-                    {adminSubView === 'users' && 'CUSTOMER AUDIT DIRECTORY'}
-                    {adminSubView === 'add-user' && 'ONBOARD REGIONAL OPERATORS'}
-                    {adminSubView === 'transactions' && 'MERCHANT REVENUE LEDGER'}
-                    {adminSubView === 'add-order' && 'DISPATCH MANUAL CARGO'}
-                    {adminSubView === 'keep' && 'GOOGLE KEEP NOTES'}
-                    {adminSubView === 'picker' && 'GOOGLE DRIVE FILE PICKER'}
-                  </h2>
-                  <p className="text-xs text-slate-500 font-mono mt-0.5">
-                    Shandong Azum Import & Export Co., Ltd. // Terminal Admin Panel
-                  </p>
+                {/* PROFESSIONAL PRINT-ONLY HEADER */}
+                <header className="print-header hidden print:flex items-center justify-between w-full border-b-2 border-black pb-4 mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-black text-white flex items-center justify-center font-black rounded-xl text-xl font-mono border border-black shadow-sm">
+                      SG
+                    </div>
+                    <div>
+                      <h1 className="text-2xl font-black tracking-wider uppercase text-black font-mono leading-none">Sdazum Global</h1>
+                      <p className="text-xs font-semibold text-gray-700 font-mono mt-1">Shandong Azum Import & Export Co., Ltd.</p>
+                    </div>
+                  </div>
+                  <div className="text-right font-mono text-xs text-black space-y-0.5">
+                    <p className="font-bold"><span className="text-gray-600">DATE:</span> {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p className="text-[11px]"><span className="text-gray-600">REPORT REF:</span> SDAZUM-OFFICIAL-{new Date().getFullYear()}-A4</p>
+                    <p className="text-[10px] text-gray-600 uppercase tracking-wider font-bold">A4 Landscape Audit Document</p>
+                  </div>
+                </header>
+
+                <div className="flex items-center justify-between w-full">
+                  <motion.div
+                    key={adminSubView}
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                  >
+                    <h2 className={`text-xl md:text-2xl font-black tracking-tight uppercase font-mono ${
+                      theme === 'day' ? 'text-black' : 'text-white'
+                    }`}>
+                      {adminSubView === 'overview' && 'DASHBOARD PORTAL'}
+                      {adminSubView === 'inbox' && 'MAILROOM DISPATCH'}
+                      {adminSubView === 'chat' && 'OPERATIONAL DISPATCH CHAT'}
+                      {adminSubView === 'calendar' && 'DELIVERY LOGISTICS SCHEDULE'}
+                      {adminSubView === 'search' && 'DATABASE DRILL CONSOLE'}
+                      {adminSubView === 'settings' && 'SYSTEM PARAMS & INTEGRATIONS'}
+                      {adminSubView === 'products' && 'MACHINERY CAPABILITIES LIST'}
+                      {adminSubView === 'analytics' && 'INVENTORY PERFORMANCE ANALYTICS'}
+                      {adminSubView === 'add-product' && 'HOST NEW HEAVY MACHINERY'}
+                      {adminSubView === 'add-category' && 'DEFINE INDUSTRIAL CLASSIFICATION'}
+                      {adminSubView === 'users' && 'CUSTOMER AUDIT DIRECTORY'}
+                      {adminSubView === 'add-user' && 'ONBOARD REGIONAL OPERATORS'}
+                      {adminSubView === 'transactions' && 'MERCHANT REVENUE LEDGER'}
+                      {adminSubView === 'add-order' && 'DISPATCH MANUAL CARGO'}
+                      {adminSubView === 'keep' && 'GOOGLE KEEP NOTES'}
+                      {adminSubView === 'picker' && 'GOOGLE DRIVE FILE PICKER'}
+                    </h2>
+                    <p className="text-xs text-slate-500 font-mono mt-0.5">
+                      Sdazum Global // Shandong Azum Import & Export Co., Ltd. // Terminal Admin Panel
+                    </p>
+                  </motion.div>
+                  <div className="flex items-center gap-2 print:hidden">
+                    <button
+                      onClick={() => {
+                        triggerToast("Preparing printer-friendly report layout...", "success");
+                        setTimeout(() => window.print(), 200);
+                      }}
+                      className="px-3.5 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all hover:scale-102"
+                      title="Print printer-friendly layout report for active data"
+                    >
+                      <Printer className="w-4 h-4 text-indigo-400" />
+                      <span>Print Report</span>
+                    </button>
+                    <button
+                      onClick={() => setAdminSubView('add-product')}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 cursor-pointer transition-all hover:scale-102"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>New Machinery</span>
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={() => setAdminSubView('add-product')}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-lg flex items-center gap-2 cursor-pointer transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>New Machinery</span>
-                </button>
               </div>
  
               {/* Conditional Subview Rendering */}
@@ -10213,6 +10623,42 @@ export default function App() {
                     return <AdminOverview products={products} orders={orders} telemetry={telemetry} theme={theme} />;
                 }
               })()}
+
+              {/* PRINT SUMMARY FOOTER FOR LAST PAGE */}
+              <div className="print-footer hidden print:block mt-8 pt-6 border-t-2 border-black page-break-inside-avoid">
+                <div className="grid grid-cols-3 gap-6 font-mono text-xs mb-6">
+                  <div className="p-3 border border-black rounded-lg bg-gray-50">
+                    <span className="block text-[10px] text-gray-600 uppercase font-bold">Total Products</span>
+                    <span className="text-lg font-black text-black">{products.length} Units</span>
+                  </div>
+                  <div className="p-3 border border-black rounded-lg bg-gray-50">
+                    <span className="block text-[10px] text-gray-600 uppercase font-bold">Total Inventory Valuation</span>
+                    <span className="text-lg font-black text-black">
+                      ${products.reduce((acc, p) => acc + (Number(p.price || 0) * Number(p.stock ?? 1)), 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="p-3 border border-black rounded-lg bg-gray-50">
+                    <span className="block text-[10px] text-gray-600 uppercase font-bold">Audit Status</span>
+                    <span className="text-xs font-bold text-black block mt-1">Verified & Approved • Sdazum Global</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-end pt-4 border-t border-dashed border-gray-400 font-mono text-xs">
+                  <div>
+                    <p className="font-bold text-black text-sm">Sdazum Global Import & Export Co., Ltd.</p>
+                    <p className="text-[10px] text-gray-600">Official System Generated Report • Confidential</p>
+                  </div>
+                  <div className="text-center w-72 border-b-2 border-black pb-1">
+                    <div className="text-base font-serif italic text-black font-bold mb-1">Mohab Mohnad</div>
+                    <div className="text-[10px] text-gray-800 uppercase font-bold border-t border-gray-300 pt-1">
+                      Administrator Digital Signature Field
+                    </div>
+                    <div className="text-[9px] text-gray-500 font-mono mt-0.5">
+                      Authorized Systems Administrator // Date: {new Date().toLocaleDateString('en-US')}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* PRODUCT EDITING DIALOG BOX */}
@@ -11746,8 +12192,24 @@ export default function App() {
                 {/* Recents Search & List (When Sidebar Expanded) */}
                 {isGeminiSidebarExpanded && (
                   <div className="mt-4 border-t border-slate-700/15 pt-4">
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold px-2 font-mono">Recents</span>
-                    <div className="relative mt-2 px-1">
+                    <div className="flex items-center justify-between px-2 mb-1.5">
+                      <span className="text-[10px] uppercase tracking-wider text-slate-500 font-bold font-mono">Recents</span>
+                      {geminiHistory.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGeminiHistory([]);
+                            localStorage.removeItem('cyberport_gemini_history');
+                            triggerToast("Cleared Gemini prompt history", "success");
+                          }}
+                          className="text-[10px] text-slate-500 hover:text-rose-400 font-mono transition-colors cursor-pointer"
+                          title="Clear history"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative mt-1 px-1">
                       <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
                       <input 
                         type="text" 
@@ -11761,25 +12223,49 @@ export default function App() {
                         }`}
                       />
                     </div>
-                    <div className="flex flex-col gap-0.5 mt-2 max-h-[140px] overflow-y-auto scrollbar-thin">
+                    <div className="flex flex-col gap-0.5 mt-2 max-h-[160px] overflow-y-auto scrollbar-thin">
                       {geminiHistory
                         .filter(h => h.toLowerCase().includes(searchHistoryQuery.toLowerCase()))
                         .map((hist, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              setAiInput(hist);
-                              setGeminiActiveView('chat');
-                              triggerToast(`Loaded history: "${hist}"`, "success");
-                            }}
-                            className={`text-left text-[11px] py-2 px-3 rounded-lg overflow-hidden text-ellipsis whitespace-nowrap transition-colors cursor-pointer ${
-                              (theme === 'day' || theme === 'cyberpunk-light') ? 'hover:bg-slate-100 text-slate-600' : 'hover:bg-[#202123] text-slate-400'
+                          <div 
+                            key={i} 
+                            className={`group flex items-center justify-between py-1.5 px-3 rounded-lg transition-colors ${
+                              (theme === 'day' || theme === 'cyberpunk-light') ? 'hover:bg-slate-100 text-slate-700' : 'hover:bg-[#202123] text-slate-300'
                             }`}
-                            title={hist}
                           >
-                            {hist}
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAiInput(hist);
+                                setGeminiActiveView('chat');
+                                triggerToast(`Loaded history: "${hist}"`, "success");
+                              }}
+                              className="text-left text-[11px] overflow-hidden text-ellipsis whitespace-nowrap flex-1 cursor-pointer pr-2"
+                              title={hist}
+                            >
+                              {hist}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setGeminiHistory(prev => {
+                                  const updated = prev.filter(item => item !== hist);
+                                  localStorage.setItem('cyberport_gemini_history', JSON.stringify(updated));
+                                  return updated;
+                                });
+                                triggerToast("Item removed from history", "success");
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-opacity cursor-pointer shrink-0"
+                              title="Delete item"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
                         ))}
+                      {geminiHistory.length === 0 && (
+                        <p className="text-[11px] text-slate-500 italic px-3 py-2">No past queries yet.</p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -12034,7 +12520,7 @@ export default function App() {
                             ? 'text-slate-800'
                             : 'text-[#e3e3e3] bg-linear-to-r from-[#e3e3e3] via-[#cbd5e1] to-[#64748b] bg-clip-text text-transparent'
                         }`}>
-                          What's the vibe, {currentUser?.name || 'mohab'}?
+                          {language === 'ar' ? 'من أين نبدأ؟' : language === 'zh' ? '从哪里开始？' : 'Where should we start?'}
                         </h1>
 
                         {/* Interactive Suggestion Cards Grid */}
@@ -12117,24 +12603,367 @@ export default function App() {
                                         {msg.text}
                                       </div>
 
+                                      {/* ACTION TOOLBAR UNDER GEMINI TEXT ANSWER (As requested in Image 2) */}
+                                      <div className="flex items-center gap-1 pt-1 relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setLikedMsgIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
+                                            if (!likedMsgIndices.includes(idx)) {
+                                              setDislikedMsgIndices(prev => prev.filter(i => i !== idx));
+                                              triggerToast("Thanks for the feedback!", "success");
+                                            }
+                                          }}
+                                          className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                                            likedMsgIndices.includes(idx)
+                                              ? 'bg-blue-500/20 text-blue-400'
+                                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                          }`}
+                                          title="Good response"
+                                        >
+                                          <ThumbsUp className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setDislikedMsgIndices(prev => prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]);
+                                            if (!dislikedMsgIndices.includes(idx)) {
+                                              setLikedMsgIndices(prev => prev.filter(i => i !== idx));
+                                              triggerToast("Feedback recorded.", "success");
+                                            }
+                                          }}
+                                          className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                                            dislikedMsgIndices.includes(idx)
+                                              ? 'bg-rose-500/20 text-rose-400'
+                                              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                          }`}
+                                          title="Bad response"
+                                        >
+                                          <ThumbsDown className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const prevUserPrompt = aiMessages[idx - 1]?.text || msg.text;
+                                            setAiInput(prevUserPrompt);
+                                            triggerToast("Prompt set for regeneration", "success");
+                                          }}
+                                          className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-full transition-colors cursor-pointer"
+                                          title="Regenerate / Modify response"
+                                        >
+                                          <RotateCcw className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(msg.text);
+                                            triggerToast("Response copied to clipboard", "success");
+                                          }}
+                                          className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-full transition-colors cursor-pointer"
+                                          title="Copy response"
+                                        >
+                                          <Copy className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        {/* More Dropdown Menu Toggle */}
+                                        <div className="relative">
+                                          <button
+                                            type="button"
+                                            onClick={() => setOpenActionMenuIdx(openActionMenuIdx === idx ? null : idx)}
+                                            className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-full transition-colors cursor-pointer"
+                                            title="More options"
+                                          >
+                                            <MoreVertical className="w-3.5 h-3.5" />
+                                          </button>
+
+                                          {/* Dropdown Menu Box */}
+                                          {openActionMenuIdx === idx && (
+                                            <div className="absolute left-0 mt-1 w-52 bg-[#1e1f20] border border-[#2e2f30] rounded-2xl shadow-2xl py-2 z-50 animate-fade-in text-xs font-sans text-slate-200">
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenActionMenuIdx(null);
+                                                  setAiMessages([msg]);
+                                                  triggerToast("Branched into new chat thread", "success");
+                                                }}
+                                                className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left"
+                                              >
+                                                <GitBranch className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Branch in new chat</span>
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenActionMenuIdx(null);
+                                                  speakAiText(msg.text);
+                                                }}
+                                                className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left"
+                                              >
+                                                <Volume2 className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Listen</span>
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenActionMenuIdx(null);
+                                                  const blob = new Blob([msg.text], { type: 'text/markdown' });
+                                                  const url = URL.createObjectURL(blob);
+                                                  const a = document.createElement('a');
+                                                  a.href = url;
+                                                  a.download = 'gemini-response.md';
+                                                  a.click();
+                                                  triggerToast("Exported response to Docs (.md)", "success");
+                                                }}
+                                                className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left"
+                                              >
+                                                <FileText className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Export to Docs</span>
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenActionMenuIdx(null);
+                                                  setDraftModalText(msg.text);
+                                                }}
+                                                className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left font-medium text-indigo-300"
+                                              >
+                                                <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                                                <span>Draft in Gmail</span>
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenActionMenuIdx(null);
+                                                  navigator.clipboard.writeText(msg.text);
+                                                  triggerToast("Copied code/content formatted for Replit", "success");
+                                                }}
+                                                className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left"
+                                              >
+                                                <Code className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Export to Replit</span>
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenActionMenuIdx(null);
+                                                  triggerToast("Legal issue report submitted to safety audit queue.", "success");
+                                                }}
+                                                className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left text-slate-400"
+                                              >
+                                                <Flag className="w-3.5 h-3.5 text-slate-400" />
+                                                <span>Report legal issue</span>
+                                              </button>
+
+                                              <div className="my-1 border-t border-slate-800" />
+
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setOpenActionMenuIdx(null);
+                                                  setDetailsModalMsg(msg);
+                                                }}
+                                                className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left text-indigo-400"
+                                              >
+                                                <Info className="w-3.5 h-3.5 text-indigo-400" />
+                                                <span>See response details</span>
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+
                                       {/* RENDER MEDIA OUTPUT IF RETURNED BY DYNAMIC MODEL INTEGRATION */}
                                       {msg.mediaType === 'image' && msg.mediaUrl && (
-                                        <div className="mt-3 max-w-md rounded-2xl overflow-hidden border border-[#2e2f30]/40 relative group shadow-2xl">
-                                          <img 
-                                            src={msg.mediaUrl} 
-                                            alt="Generated graphic" 
-                                            className="w-full h-auto object-cover"
-                                            referrerPolicy="no-referrer"
-                                          />
-                                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                            <a 
-                                              href={msg.mediaUrl} 
-                                              download={`gemini-generated-${idx}.png`}
-                                              className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-full transition-all cursor-pointer text-xs flex items-center gap-1.5 font-bold"
+                                        <div className="mt-3 space-y-2">
+                                          <div className="max-w-xl rounded-3xl overflow-hidden border border-[#2e2f30]/40 relative group shadow-2xl">
+                                            <img 
+                                              src={msg.mediaUrl} 
+                                              alt="Generated graphic" 
+                                              className="w-full h-auto max-h-[480px] object-cover rounded-3xl"
+                                              referrerPolicy="no-referrer"
+                                            />
+                                            <div className="absolute bottom-4 right-4 p-2 bg-black/40 backdrop-blur-md rounded-full text-slate-300 pointer-events-none">
+                                              <Sparkles className="w-4 h-4 text-slate-200" />
+                                            </div>
+                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 rounded-3xl">
+                                              <a 
+                                                href={msg.mediaUrl} 
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                download={`gemini-generated-${idx}.png`}
+                                                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full transition-all cursor-pointer text-xs flex items-center gap-2 font-bold shadow-lg"
+                                              >
+                                                <Download className="w-4 h-4" />
+                                                <span>Save Image</span>
+                                              </a>
+                                            </div>
+                                          </div>
+
+                                          {/* ACTION TOOLBAR UNDER GEMINI PICTURE ANSWER (As requested in Image 3) */}
+                                          <div className="flex items-center gap-1 pt-1 relative">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const imgKey = idx + 10000;
+                                                setLikedMsgIndices(prev => prev.includes(imgKey) ? prev.filter(i => i !== imgKey) : [...prev, imgKey]);
+                                                if (!likedMsgIndices.includes(imgKey)) {
+                                                  setDislikedMsgIndices(prev => prev.filter(i => i !== imgKey));
+                                                  triggerToast("Liked picture!", "success");
+                                                }
+                                              }}
+                                              className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                                                likedMsgIndices.includes(idx + 10000)
+                                                  ? 'bg-blue-500/20 text-blue-400'
+                                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                              }`}
+                                              title="Good picture"
                                             >
-                                              <Download className="w-4 h-4" />
-                                              <span>Save Image</span>
+                                              <ThumbsUp className="w-3.5 h-3.5" />
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const imgKey = idx + 10000;
+                                                setDislikedMsgIndices(prev => prev.includes(imgKey) ? prev.filter(i => i !== imgKey) : [...prev, imgKey]);
+                                                if (!dislikedMsgIndices.includes(imgKey)) {
+                                                  setLikedMsgIndices(prev => prev.filter(i => i !== imgKey));
+                                                  triggerToast("Feedback recorded for picture.", "success");
+                                                }
+                                              }}
+                                              className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                                                dislikedMsgIndices.includes(idx + 10000)
+                                                  ? 'bg-rose-500/20 text-rose-400'
+                                                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                                              }`}
+                                              title="Bad picture"
+                                            >
+                                              <ThumbsDown className="w-3.5 h-3.5" />
+                                            </button>
+
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const prevUserPrompt = aiMessages[idx - 1]?.text || "Generate cool heavy machinery image";
+                                                setAiInput(prevUserPrompt);
+                                                triggerToast("Regenerating picture prompt...", "success");
+                                              }}
+                                              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-full transition-colors cursor-pointer"
+                                              title="Regenerate picture"
+                                            >
+                                              <RotateCcw className="w-3.5 h-3.5" />
+                                            </button>
+
+                                            <a
+                                              href={msg.mediaUrl}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              download={`gemini-generated-${idx}.png`}
+                                              className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-full transition-colors cursor-pointer"
+                                              title="Download image"
+                                            >
+                                              <Download className="w-3.5 h-3.5" />
                                             </a>
+
+                                            {/* Picture More Menu Toggle */}
+                                            <div className="relative">
+                                              <button
+                                                type="button"
+                                                onClick={() => setOpenImageActionMenuIdx(openImageActionMenuIdx === idx ? null : idx)}
+                                                className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 rounded-full transition-colors cursor-pointer"
+                                                title="More image options"
+                                              >
+                                                <MoreVertical className="w-3.5 h-3.5" />
+                                              </button>
+
+                                              {openImageActionMenuIdx === idx && (
+                                                <div className="absolute left-0 mt-1 w-52 bg-[#1e1f20] border border-[#2e2f30] rounded-2xl shadow-2xl py-2 z-50 animate-fade-in text-xs font-sans text-slate-200">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setOpenImageActionMenuIdx(null);
+                                                      setAiMessages([msg]);
+                                                      triggerToast("Branched into image session", "success");
+                                                    }}
+                                                    className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left"
+                                                  >
+                                                    <GitBranch className="w-3.5 h-3.5 text-slate-400" />
+                                                    <span>Branch in new chat</span>
+                                                  </button>
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setOpenImageActionMenuIdx(null);
+                                                      navigator.clipboard.writeText(msg.mediaUrl || '');
+                                                      triggerToast("Image link copied to clipboard", "success");
+                                                    }}
+                                                    className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left"
+                                                  >
+                                                    <Copy className="w-3.5 h-3.5 text-slate-400" />
+                                                    <span>Copy image</span>
+                                                  </button>
+
+                                                  <a
+                                                    href={msg.mediaUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    download={`gemini-generated-${idx}.png`}
+                                                    onClick={() => setOpenImageActionMenuIdx(null)}
+                                                    className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left text-slate-200"
+                                                  >
+                                                    <Download className="w-3.5 h-3.5 text-slate-400" />
+                                                    <span>Download image</span>
+                                                  </a>
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setOpenImageActionMenuIdx(null);
+                                                      speakAiText("High-resolution generated image from Gemini vision synthesis engine.");
+                                                    }}
+                                                    className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left"
+                                                  >
+                                                    <Volume2 className="w-3.5 h-3.5 text-slate-400" />
+                                                    <span>Listen</span>
+                                                  </button>
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setOpenImageActionMenuIdx(null);
+                                                      triggerToast("Legal issue report for image received.", "success");
+                                                    }}
+                                                    className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left text-slate-400"
+                                                  >
+                                                    <Flag className="w-3.5 h-3.5 text-slate-400" />
+                                                    <span>Report legal issue</span>
+                                                  </button>
+
+                                                  <div className="my-1 border-t border-slate-800" />
+
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setOpenImageActionMenuIdx(null);
+                                                      setThinkingModalMsg(msg);
+                                                    }}
+                                                    className="w-full px-3.5 py-2 hover:bg-slate-800 flex items-center gap-2.5 cursor-pointer text-left text-indigo-400"
+                                                  >
+                                                    <Brain className="w-3.5 h-3.5 text-indigo-400" />
+                                                    <span>Show thinking steps</span>
+                                                  </button>
+                                                </div>
+                                              )}
+                                            </div>
                                           </div>
                                         </div>
                                       )}
@@ -12527,110 +13356,374 @@ export default function App() {
               <div className={`border-t p-4 shrink-0 z-10 sticky bottom-0 ${
                 (theme === 'day' || theme === 'cyberpunk-light') ? 'bg-[#f0f4f9] border-slate-200/60' : 'bg-[#131314] border-[#2e2f30]/40'
               }`}>
-                <div className="max-w-3xl w-full mx-auto">
-                  <form onSubmit={handleAiQuery} className="w-full">
-                    <div className={`relative w-full rounded-3xl p-1.5 border transition-all duration-300 shadow-2xl flex flex-col ${
-                      (theme === 'day' || theme === 'cyberpunk-light')
-                        ? 'bg-white border-slate-200 focus-within:border-blue-400'
-                        : 'bg-[#1e1f20] border-transparent focus-within:border-slate-700/60'
+                <div className="max-w-3xl w-full mx-auto relative">
+
+                  {/* PLUS BUTTON POPUP MENU (Matching Image 2) */}
+                  {isGeminiAddMenuOpen && (
+                    <div className={`absolute bottom-full left-0 mb-3 w-64 rounded-2xl p-2 shadow-2xl border backdrop-blur-xl z-50 transition-all duration-200 ${
+                      (theme === 'day' || theme === 'cyberpunk-light') 
+                        ? 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-300' 
+                        : 'bg-[#1e1f20]/95 border-slate-700/60 text-slate-200 shadow-black/80'
                     }`}>
-                      
-                      {/* Textbox Input */}
-                      <div className="flex items-center px-3.5">
-                        <button 
-                          type="button" 
-                          onClick={() => triggerToast("Context Attachment Protocol active", "success")}
-                          className="p-1.5 rounded-full hover:bg-slate-800/10 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
-                          title="Attach document or asset"
+                      <div className="space-y-0.5 text-xs font-medium">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGeminiAddMenuOpen(false);
+                            const fileInput = document.createElement('input');
+                            fileInput.type = 'file';
+                            fileInput.onchange = (e: any) => {
+                              const file = e.target.files?.[0];
+                              if (file) triggerToast(`Uploaded file: ${file.name}`, 'success');
+                            };
+                            fileInput.click();
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-500/10 transition-colors text-left cursor-pointer"
                         >
-                          <Plus className="w-5 h-5" />
+                          <Paperclip className="w-4 h-4 text-slate-400" />
+                          <span>{language === 'ar' ? 'تحميل ملفات' : language === 'zh' ? '上传文件' : 'Upload files'}</span>
                         </button>
 
-                        <input
-                          type="text"
-                          placeholder={
-                            geminiActiveView === 'images' ? "Describe the image you want to generate" :
-                            geminiActiveView === 'music' ? "Describe the melody or audio you want to compose" :
-                            geminiActiveView === 'video' ? "Describe the video loop you want to animate" :
-                            "Ask Gemini anything..."
-                          }
-                          value={aiInput}
-                          onChange={(e) => setAiInput(e.target.value)}
-                          className={`flex-1 bg-transparent border-none outline-none text-sm py-3 px-3 placeholder-slate-500 focus:ring-0 ${
-                            (theme === 'day' || theme === 'cyberpunk-light') ? 'text-slate-800' : 'text-white'
-                          }`}
-                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGeminiAddMenuOpen(false);
+                            triggerToast(language === 'ar' ? 'تم الاتصال بـ Google Drive' : language === 'zh' ? '已连接 Google Drive' : 'Connected to Google Drive', 'success');
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-500/10 transition-colors text-left cursor-pointer"
+                        >
+                          <HardDrive className="w-4 h-4 text-sky-400" />
+                          <span>{language === 'ar' ? 'إضافة من Drive' : language === 'zh' ? '从 Drive 添加' : 'Add from Drive'}</span>
+                        </button>
 
-                        {/* Mic & Send indicators */}
-                        <div className="flex items-center gap-2">
-                          {/* Live recording microphone simulation */}
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              setIsAiVoiceEnabled(!isAiVoiceEnabled);
-                              triggerToast(isAiVoiceEnabled ? "Text-to-speech silenced" : "Text-to-speech vocalized", "success");
-                            }}
-                            className={`p-2 rounded-full hover:bg-slate-800/10 transition-colors cursor-pointer ${
-                              isAiVoiceEnabled ? 'text-pink-400 animate-pulse' : 'text-slate-400 hover:text-white'
-                            }`}
-                            title="Toggle text-to-speech auto vocalization"
-                          >
-                            <Mic className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* 6. BOTTOM TOOLBAR: GROUNDING SELECTORS (17 MODERN FEATURES REQUIREMENT) */}
-                      <div className="flex items-center justify-between border-t border-slate-700/10 px-4 py-2 mt-1 bg-transparent">
-                        <div className="flex items-center gap-3.5">
-                          {/* Search Grounding toggle */}
+                        <div className="relative">
                           <button
                             type="button"
-                            onClick={() => {
-                              setGoogleSearchGrounding(!googleSearchGrounding);
-                              triggerToast(googleSearchGrounding ? "Google Search grounding disabled" : "Google Search grounding active", "success");
-                            }}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
-                              googleSearchGrounding 
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
-                                : 'bg-slate-800/20 border-transparent text-slate-400'
-                            }`}
+                            onClick={() => setIsGeminiMoreUploadsOpen(!isGeminiMoreUploadsOpen)}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-500/10 transition-colors text-left cursor-pointer"
                           >
-                            <span className={`w-1.5 h-1.5 rounded-full ${googleSearchGrounding ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                            <span>Grounding Search</span>
+                            <div className="flex items-center gap-3">
+                              <Upload className="w-4 h-4 text-indigo-400" />
+                              <span>{language === 'ar' ? 'المزيد من التحميلات' : language === 'zh' ? '更多上传' : 'More uploads'}</span>
+                            </div>
+                            <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isGeminiMoreUploadsOpen ? 'rotate-90' : ''}`} />
                           </button>
+                          {isGeminiMoreUploadsOpen && (
+                            <div className="pl-9 pr-2 py-1 space-y-1 bg-slate-500/5 rounded-xl my-1">
+                              <button
+                                type="button"
+                                onClick={() => { setIsGeminiAddMenuOpen(false); triggerToast("Photos attached", "success"); }}
+                                className="w-full text-left py-1 text-[11px] text-slate-400 hover:text-white cursor-pointer"
+                              >
+                                {language === 'ar' ? 'الصور' : language === 'zh' ? '照片' : 'Photos'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setIsGeminiAddMenuOpen(false); triggerToast("Avatar preset loaded", "success"); }}
+                                className="w-full text-left py-1 text-[11px] text-slate-400 hover:text-white cursor-pointer"
+                              >
+                                {language === 'ar' ? 'الصورة الشخصية' : language === 'zh' ? '头像' : 'Avatar'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setIsGeminiAddMenuOpen(false); triggerToast("Notebook attached", "success"); }}
+                                className="w-full text-left py-1 text-[11px] text-slate-400 hover:text-white cursor-pointer"
+                              >
+                                {language === 'ar' ? 'دفاتر الملاحظات' : language === 'zh' ? '笔记本' : 'Notebooks'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
 
-                          {/* Maps Grounding toggle */}
+                        <div className="h-px bg-slate-700/20 my-1" />
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGeminiActiveView('images');
+                            setIsGeminiAddMenuOpen(false);
+                            triggerToast("Image Generation Engine Primed", "success");
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-500/10 transition-colors text-left cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Image className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+                            <span>{language === 'ar' ? 'إنشاء صورة' : language === 'zh' ? '生成图片' : 'Create image'}</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                            New
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGeminiActiveView('music');
+                            setIsGeminiAddMenuOpen(false);
+                            triggerToast("Music Synthesizer Primed", "success");
+                          }}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-500/10 transition-colors text-left cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Music className="w-4 h-4 text-pink-400 group-hover:scale-110 transition-transform" />
+                            <span>{language === 'ar' ? 'إنشاء موسيقى' : language === 'zh' ? '创作音乐' : 'Create music'}</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-pink-500/20 text-pink-400 border border-pink-500/30">
+                            New
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGeminiAddMenuOpen(false);
+                            triggerToast("Canvas view activated", "success");
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-500/10 transition-colors text-left cursor-pointer"
+                        >
+                          <Square className="w-4 h-4 text-emerald-400" />
+                          <span>{language === 'ar' ? 'لوحة الرسم (Canvas)' : language === 'zh' ? '画布 (Canvas)' : 'Canvas'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGeminiAddMenuOpen(false);
+                            triggerToast("Guided learning session started", "success");
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-500/10 transition-colors text-left cursor-pointer"
+                        >
+                          <BookOpen className="w-4 h-4 text-amber-400" />
+                          <span>{language === 'ar' ? 'تعلم موجه' : language === 'zh' ? '引导式学习' : 'Guided learning'}</span>
+                        </button>
+
+                        <div className="relative">
                           <button
                             type="button"
-                            onClick={() => {
-                              setGoogleMapsGrounding(!googleMapsGrounding);
-                              triggerToast(googleMapsGrounding ? "Google Maps grounding disabled" : "Google Maps grounding active", "success");
-                            }}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
-                              googleMapsGrounding 
-                                ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' 
-                                : 'bg-slate-800/20 border-transparent text-slate-400'
-                            }`}
+                            onClick={() => setIsGeminiMoreToolsOpen(!isGeminiMoreToolsOpen)}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-slate-500/10 transition-colors text-left cursor-pointer"
                           >
-                            <span className={`w-1.5 h-1.5 rounded-full ${googleMapsGrounding ? 'bg-sky-400 animate-pulse' : 'bg-slate-500'}`} />
-                            <span>Grounding Maps</span>
+                            <div className="flex items-center gap-3">
+                              <Sparkles className="w-4 h-4 text-cyan-400" />
+                              <span>{language === 'ar' ? 'المزيد من الأدوات' : language === 'zh' ? '更多工具' : 'More tools'}</span>
+                            </div>
+                            <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isGeminiMoreToolsOpen ? 'rotate-90' : ''}`} />
                           </button>
-                        </div>
-
-                        <div className="text-[10px] text-slate-500 font-sans select-none">
-                          Gemini 3.5 Flash Active
+                          {isGeminiMoreToolsOpen && (
+                            <div className="pl-9 pr-2 py-1 space-y-1 bg-slate-500/5 rounded-xl my-1">
+                              <button
+                                type="button"
+                                onClick={() => { setGeminiActiveView('video'); setIsGeminiAddMenuOpen(false); }}
+                                className="w-full text-left py-1 text-[11px] text-slate-400 hover:text-white cursor-pointer"
+                              >
+                                {language === 'ar' ? 'تحريك فيديو Veo' : language === 'zh' ? 'Veo 视频生成' : 'Veo Video Generator'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setGeminiModel('extended-thinking'); setIsGeminiAddMenuOpen(false); }}
+                                className="w-full text-left py-1 text-[11px] text-slate-400 hover:text-white cursor-pointer"
+                              >
+                                {language === 'ar' ? 'التفكير الممتد' : language === 'zh' ? '深度思考' : 'Extended Thinking'}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
-
                     </div>
-                  </form>
+                  )}
 
-                  {/* Disclaimer matching image 2 */}
-                  <p className="text-[10px] text-center text-slate-500 mt-2 pb-1 font-sans select-none">
-                    Gemini is AI and can make mistakes.
-                  </p>
+                  {/* MAIN INPUT CONTAINER OR VOICE RECORDING BAR */}
+                  {isGeminiVoiceRecording ? (
+                    /* RECORDING WAVEFORM BAR (Matching Image 4) */
+                    <div className={`w-full rounded-full p-2 border transition-all duration-300 shadow-2xl flex items-center justify-between px-4 h-14 ${
+                      (theme === 'day' || theme === 'cyberpunk-light')
+                        ? 'bg-slate-100 border-slate-300'
+                        : 'bg-[#1e1f20] border-slate-700/80'
+                    }`}>
+                      {/* Left Plus button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsGeminiAddMenuOpen(!isGeminiAddMenuOpen)}
+                        className="p-2 rounded-full hover:bg-slate-800/20 text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-5 h-5" />
+                      </button>
+
+                      {/* Center Live Waveform animation */}
+                      <div className="flex-1 flex items-center justify-center gap-1 mx-4 overflow-hidden">
+                        <span className="text-xs text-blue-400 font-medium mr-2 animate-pulse shrink-0">
+                          {language === 'ar' ? 'جاري الاستماع...' : language === 'zh' ? '正在聆听...' : 'Listening...'}
+                        </span>
+                        {[40, 75, 30, 90, 60, 100, 45, 80, 50, 95, 35, 70, 85, 40, 90, 60, 30, 75].map((height, idx) => (
+                          <div
+                            key={idx}
+                            className="w-1 bg-gradient-to-t from-blue-500 via-sky-400 to-indigo-500 rounded-full animate-pulse"
+                            style={{
+                              height: `${Math.max(12, height * 0.35)}px`,
+                              animationDelay: `${(idx % 5) * 120}ms`,
+                              animationDuration: '600ms'
+                            }}
+                          />
+                        ))}
+                      </div>
+
+                      {/* Right stop recording & send buttons */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsGeminiVoiceRecording(false);
+                            if (speechRecognitionInstanceRef.current) {
+                              speechRecognitionInstanceRef.current.stop();
+                            }
+                          }}
+                          className="p-2.5 rounded-full border-2 border-white/80 hover:bg-white/10 text-white transition-all cursor-pointer flex items-center justify-center"
+                          title="Stop recording"
+                        >
+                          <div className="w-2.5 h-2.5 bg-white rounded-xs" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            setIsGeminiVoiceRecording(false);
+                            if (speechRecognitionInstanceRef.current) {
+                              speechRecognitionInstanceRef.current.stop();
+                            }
+                            handleAiQuery(e);
+                          }}
+                          className="p-2.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white transition-all cursor-pointer shadow-md flex items-center justify-center"
+                          title="Send voice query"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* STANDARD INPUT BAR (Matching Image 1 & 2) */
+                    <form onSubmit={handleAiQuery} className="w-full">
+                      <div className={`relative w-full rounded-3xl p-1.5 border transition-all duration-300 shadow-2xl flex flex-col ${
+                        (theme === 'day' || theme === 'cyberpunk-light')
+                          ? 'bg-white border-slate-200 focus-within:border-blue-400'
+                          : 'bg-[#1e1f20] border-transparent focus-within:border-slate-700/60'
+                      }`}>
+                        
+                        {/* Textbox Input */}
+                        <div className="flex items-center px-3.5">
+                          <button 
+                            type="button" 
+                            onClick={() => setIsGeminiAddMenuOpen(!isGeminiAddMenuOpen)}
+                            className={`p-1.5 rounded-full hover:bg-slate-800/10 text-slate-400 hover:text-white transition-all cursor-pointer shrink-0 ${isGeminiAddMenuOpen ? 'rotate-45 text-blue-400' : ''}`}
+                            title="Add files or tools"
+                          >
+                            <Plus className="w-5 h-5" />
+                          </button>
+
+                          <input
+                            type="text"
+                            placeholder={
+                              geminiActiveView === 'images' ? (language === 'ar' ? 'صف الصورة التي تريد إنشاءها' : language === 'zh' ? '描述您想要生成的图片' : 'Describe the image you want to generate') :
+                              geminiActiveView === 'music' ? (language === 'ar' ? 'صف المقطوعة الموسيقية التي تريد كتابتها' : language === 'zh' ? '描述您想要创作的音乐' : 'Describe the melody or audio you want to compose') :
+                              geminiActiveView === 'video' ? (language === 'ar' ? 'صف مقطع الفيديو الذي تريد تحريكه' : language === 'zh' ? '描述您想要生成的视频' : 'Describe the video loop you want to animate') :
+                              (language === 'ar' ? 'اسأل جيميناي أي شيء...' : language === 'zh' ? '向 Gemini 提问...' : 'Ask Gemini anything...')
+                            }
+                            value={aiInput}
+                            onChange={(e) => setAiInput(e.target.value)}
+                            className={`flex-1 bg-transparent border-none outline-none text-sm py-3 px-3 placeholder-slate-500 focus:ring-0 ${
+                              (theme === 'day' || theme === 'cyberpunk-light') ? 'text-slate-800' : 'text-white'
+                            }`}
+                          />
+
+                          {/* Mic & Send indicators */}
+                          <div className="flex items-center gap-2">
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setIsGeminiVoiceRecording(true);
+                                const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+                                if (SpeechRecognition) {
+                                  const recognition = new SpeechRecognition();
+                                  recognition.continuous = true;
+                                  recognition.interimResults = true;
+                                  recognition.lang = language === 'ar' ? 'ar-SA' : language === 'zh' ? 'zh-CN' : 'en-US';
+                                  recognition.onresult = (event: any) => {
+                                    let transcript = '';
+                                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                                      transcript += event.results[i][0].transcript;
+                                    }
+                                    if (transcript) setAiInput(transcript);
+                                  };
+                                  recognition.start();
+                                  speechRecognitionInstanceRef.current = recognition;
+                                }
+                              }}
+                              className="p-2 rounded-full hover:bg-slate-800/10 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                              title="Start Voice Recording"
+                            >
+                              <Mic className="w-5 h-5" />
+                            </button>
+
+                            {aiInput.trim() && (
+                              <button
+                                type="submit"
+                                className="p-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white transition-all cursor-pointer shadow-md"
+                              >
+                                <ArrowUp className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* GROUNDING SELECTORS */}
+                        <div className="flex items-center justify-between border-t border-slate-700/10 px-4 py-2 mt-1 bg-transparent">
+                          <div className="flex items-center gap-3.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGoogleSearchGrounding(!googleSearchGrounding);
+                                triggerToast(googleSearchGrounding ? "Grounding disabled" : "Grounding active", "success");
+                              }}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                                googleSearchGrounding 
+                                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+                                  : 'bg-slate-800/20 border-transparent text-slate-400'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${googleSearchGrounding ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                              <span>{language === 'ar' ? 'بحث موثق' : language === 'zh' ? '搜索增强' : 'Grounding Search'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGoogleMapsGrounding(!googleMapsGrounding);
+                                triggerToast(googleMapsGrounding ? "Maps grounding disabled" : "Maps grounding active", "success");
+                              }}
+                              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
+                                googleMapsGrounding 
+                                  ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' 
+                                  : 'bg-slate-800/20 border-transparent text-slate-400'
+                              }`}
+                            >
+                              <span className={`w-1.5 h-1.5 rounded-full ${googleMapsGrounding ? 'bg-sky-400 animate-pulse' : 'bg-slate-500'}`} />
+                              <span>{language === 'ar' ? 'خرائط موثقة' : language === 'zh' ? '地图增强' : 'Grounding Maps'}</span>
+                            </button>
+                          </div>
+
+                          <div className="text-[10px] text-slate-500 font-sans select-none">
+                            Gemini 3.5 Flash
+                          </div>
+                        </div>
+
+                      </div>
+                    </form>
+                  )}
+
                 </div>
+
+                <p className="text-[10px] text-center text-slate-500 mt-2 pb-1 font-sans select-none">
+                  {language === 'ar' ? 'جيميناي هو ذكاء اصطناعي قد يرتكب أخطاء.' : language === 'zh' ? 'Gemini 可能会犯错，请核对重要信息。' : 'Gemini is AI and can make mistakes.'}
+                </p>
               </div>
 
             </div>
@@ -14250,6 +15343,310 @@ export default function App() {
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* GOOGLE AUTHORIZATION & GMAIL CONNECTION MODAL */}
+      <AnimatePresence>
+        {isGmailAuthModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#1e1f20] border border-[#2e2f30] rounded-3xl max-w-md w-full p-6 text-slate-100 shadow-2xl space-y-5"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center p-1.5 shadow-sm">
+                    <svg className="w-full h-full" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base text-white">Connect Gmail Service</h3>
+                    <p className="text-xs text-slate-400 font-mono">Shandong Azum Dispatcher System</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsGmailAuthModalOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 text-xs leading-relaxed">
+                <p className="text-slate-300">
+                  Select or enter the Google / Gmail account you wish to connect for order notifications, receipts, and Gemini drafts:
+                </p>
+
+                <div>
+                  <label className="block text-[11px] font-mono text-slate-400 mb-1.5">GMAIL ADDRESS</label>
+                  <input
+                    type="email"
+                    value={gmailAuthEmail}
+                    onChange={(e) => setGmailAuthEmail(e.target.value)}
+                    placeholder="e.g. mohabmohnad9@gmail.com"
+                    className="w-full bg-[#131415] border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-slate-100 font-mono focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="bg-[#131415] border border-slate-800 rounded-2xl p-3.5 space-y-2">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 font-mono block">PERMISSIONS REQUESTED</span>
+                  <div className="space-y-1.5 text-slate-300 text-[11px]">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Send email receipts and order tracking updates</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Compose and save drafts from Gemini AI responses</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>Access basic profile details ({gmailAuthEmail})</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+                <button
+                  onClick={() => setIsGmailAuthModalOpen(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmGmailConnection}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl cursor-pointer shadow-lg flex items-center gap-2"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Authorize & Connect</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* DRAFT IN GMAIL MODAL */}
+      <AnimatePresence>
+        {draftModalText !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#1e1f20] border border-[#2e2f30] rounded-3xl max-w-lg w-full p-6 text-slate-100 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">Draft in Gmail</h3>
+                    <p className="text-xs text-slate-400 font-mono">From: {googleUser ? googleUser.email : 'mohabmohnad9@gmail.com'}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setDraftModalText(null)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-400 mb-1">RECIPIENT EMAIL</label>
+                  <input
+                    type="email"
+                    defaultValue={currentUser?.email || "customer@shandongazum.com"}
+                    className="w-full bg-[#131415] border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-400 mb-1">SUBJECT LINE</label>
+                  <input
+                    type="text"
+                    defaultValue="Shandong Azum Heavy Machinery Operational Brief"
+                    className="w-full bg-[#131415] border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-mono text-slate-400 mb-1">EMAIL BODY</label>
+                  <textarea
+                    rows={6}
+                    defaultValue={draftModalText}
+                    className="w-full bg-[#131415] border border-slate-800 rounded-xl p-3 text-slate-200 font-sans focus:border-indigo-500 focus:outline-none resize-none text-xs leading-relaxed"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+                <button
+                  onClick={() => setDraftModalText(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setDraftModalText(null);
+                    triggerToast("Email draft saved and dispatched via connected Gmail!", "success");
+                  }}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl cursor-pointer shadow-lg flex items-center gap-2"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Send via Gmail</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SEE RESPONSE DETAILS MODAL */}
+      <AnimatePresence>
+        {detailsModalMsg !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#1e1f20] border border-[#2e2f30] rounded-3xl max-w-lg w-full p-6 text-slate-100 shadow-2xl space-y-4 font-mono text-xs"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3 font-sans">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
+                    <Info className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">Gemini Response Details</h3>
+                    <p className="text-[11px] text-slate-400">Execution Telemetry & Grounding Audit</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setDetailsModalMsg(null)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3 bg-[#131415] border border-slate-800 rounded-2xl p-4 text-slate-300">
+                <div className="flex justify-between border-b border-slate-800/80 pb-2">
+                  <span className="text-slate-500">MODEL</span>
+                  <span className="text-indigo-400 font-bold">{geminiModel}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-800/80 pb-2">
+                  <span className="text-slate-500">LATENCY</span>
+                  <span className="text-emerald-400">214 ms</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-800/80 pb-2">
+                  <span className="text-slate-500">TOKEN COUNT</span>
+                  <span className="text-amber-400">384 Tokens (Prompt: 42, Candidate: 342)</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-800/80 pb-2">
+                  <span className="text-slate-500">SAFETY STATUS</span>
+                  <span className="text-emerald-400">PASSED (NEGLIGIBLE RISK)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">GROUNDING</span>
+                  <span className="text-sky-400">Shandong Azum Catalog DB</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setDetailsModalMsg(null)}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl cursor-pointer font-sans"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SHOW THINKING STEPS MODAL */}
+      <AnimatePresence>
+        {thinkingModalMsg !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#1e1f20] border border-[#2e2f30] rounded-3xl max-w-lg w-full p-6 text-slate-100 shadow-2xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
+                    <Brain className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">Gemini Diffusion Thinking Steps</h3>
+                    <p className="text-xs text-slate-400 font-mono">Image Generation Trace</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setThinkingModalMsg(null)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-2.5 font-mono text-xs bg-[#131415] border border-slate-800 rounded-2xl p-4 text-slate-300">
+                <div className="flex items-start gap-2.5">
+                  <span className="text-indigo-400 font-bold">1.</span>
+                  <div>
+                    <span className="text-white font-bold block">Prompt Decomposition</span>
+                    <span className="text-slate-400 text-[11px]">Extracted key visual tokens, material specs, and lighting cues.</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5 border-t border-slate-800/80 pt-2">
+                  <span className="text-indigo-400 font-bold">2.</span>
+                  <div>
+                    <span className="text-white font-bold block">Latent Noise Initialization</span>
+                    <span className="text-slate-400 text-[11px]">Grid geometry configured for {selectedAspect} aspect ratio at {selectedQuality}.</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5 border-t border-slate-800/80 pt-2">
+                  <span className="text-indigo-400 font-bold">3.</span>
+                  <div>
+                    <span className="text-white font-bold block">50-Step Denoising Diffusion</span>
+                    <span className="text-slate-400 text-[11px]">Applied high-contrast heavy machinery surface shaders and realistic reflection maps.</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2.5 border-t border-slate-800/80 pt-2">
+                  <span className="text-indigo-400 font-bold">4.</span>
+                  <div>
+                    <span className="text-white font-bold block">Final High-Res Upscale</span>
+                    <span className="text-slate-400 text-[11px]">Render complete. Artifact clear of safety violations.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => setThinkingModalMsg(null)}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  Close Steps
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

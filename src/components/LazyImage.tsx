@@ -5,13 +5,15 @@ interface LazyImageProps {
   alt: string;
   className?: string;
   referrerPolicy?: React.HTMLAttributeReferrerPolicy;
+  theme?: string;
 }
 
 export const LazyImage: React.FC<LazyImageProps> = ({
   src,
   alt,
   className = '',
-  referrerPolicy
+  referrerPolicy,
+  theme = 'cyberpunk'
 }) => {
   const [isIntersected, setIsIntersected] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -46,11 +48,21 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     };
   }, []);
 
+  const containerBg = theme === 'day' 
+    ? 'bg-slate-50 border border-slate-100' 
+    : theme === 'night' 
+      ? 'bg-slate-900 border border-slate-800' 
+      : 'bg-slate-950/80 border border-slate-900';
+
   return (
-    <div ref={containerRef} className="relative w-full h-full bg-[#030611] overflow-hidden rounded-2xl">
-      {/* Premium Cyberpunk Skeleton Screen */}
+    <div ref={containerRef} className={`relative w-full h-full overflow-hidden rounded-2xl ${containerBg}`}>
+      {/* Premium Skeleton Screen */}
       {(!isIntersected || !isLoaded) && (
-        <div className="absolute inset-0 z-10 flex flex-col justify-between p-4 animate-pulse bg-gradient-to-br from-[#0c0f1d] via-[#12162a] to-[#070914]">
+        <div className={`absolute inset-0 z-10 flex flex-col justify-between p-4 animate-pulse ${
+          theme === 'day' 
+            ? 'bg-slate-100' 
+            : 'bg-gradient-to-br from-[#0c0f1d] via-[#12162a] to-[#070914]'
+        }`}>
           {/* Skeleton Top Accents */}
           <div className="flex justify-between items-center">
             <div className="w-8 h-8 rounded-full bg-slate-800/40" />
