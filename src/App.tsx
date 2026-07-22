@@ -2601,6 +2601,9 @@ export default function App() {
   const [googleClientId, setGoogleClientId] = useState<string>('');
 
   // Reviews System Local Memory
+  const [lastSyncedTimestamp, setLastSyncedTimestamp] = useState<string>(() =>
+    new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  );
   const [reviewsDB, setReviewsDB] = useState<Record<string, Product['reviews']>>(() => {
     const saved = localStorage.getItem('cyberport_reviews');
     return saved ? JSON.parse(saved) : {};
@@ -9312,40 +9315,54 @@ export default function App() {
                   </div>
                 </header>
 
-                <div className="flex items-center justify-between w-full">
+                <div className="flex flex-wrap items-center justify-between gap-4 w-full">
                   <motion.div
                     key={adminSubView}
                     initial={{ opacity: 0, x: -16 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.25, ease: 'easeOut' }}
+                    className="flex flex-col min-w-0"
                   >
-                    <h2 className={`text-xl md:text-2xl font-black tracking-tight uppercase font-mono ${
-                      theme === 'day' ? 'text-black' : 'text-white'
-                    }`}>
-                      {adminSubView === 'overview' && 'DASHBOARD PORTAL'}
-                      {adminSubView === 'inbox' && 'MAILROOM DISPATCH'}
-                      {adminSubView === 'chat' && 'OPERATIONAL DISPATCH CHAT'}
-                      {adminSubView === 'calendar' && 'DELIVERY LOGISTICS SCHEDULE'}
-                      {adminSubView === 'search' && 'DATABASE DRILL CONSOLE'}
-                      {adminSubView === 'settings' && 'SYSTEM PARAMS & INTEGRATIONS'}
-                      {adminSubView === 'products' && 'MACHINERY CAPABILITIES LIST'}
-                      {adminSubView === 'analytics' && 'INVENTORY PERFORMANCE ANALYTICS'}
-                      {adminSubView === 'add-product' && 'HOST NEW HEAVY MACHINERY'}
-                      {adminSubView === 'add-category' && 'DEFINE INDUSTRIAL CLASSIFICATION'}
-                      {adminSubView === 'users' && 'CUSTOMER AUDIT DIRECTORY'}
-                      {adminSubView === 'add-user' && 'ONBOARD REGIONAL OPERATORS'}
-                      {adminSubView === 'transactions' && 'MERCHANT REVENUE LEDGER'}
-                      {adminSubView === 'add-order' && 'DISPATCH MANUAL CARGO'}
-                      {adminSubView === 'keep' && 'GOOGLE KEEP NOTES'}
-                      {adminSubView === 'picker' && 'GOOGLE DRIVE FILE PICKER'}
-                    </h2>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h2 className={`text-xl md:text-2xl font-black tracking-tight uppercase font-mono ${
+                        theme === 'day' ? 'text-black' : 'text-white'
+                      }`}>
+                        {adminSubView === 'overview' && 'DASHBOARD PORTAL'}
+                        {adminSubView === 'inbox' && 'MAILROOM DISPATCH'}
+                        {adminSubView === 'chat' && 'OPERATIONAL DISPATCH CHAT'}
+                        {adminSubView === 'calendar' && 'DELIVERY LOGISTICS SCHEDULE'}
+                        {adminSubView === 'search' && 'DATABASE DRILL CONSOLE'}
+                        {adminSubView === 'settings' && 'SYSTEM PARAMS & INTEGRATIONS'}
+                        {adminSubView === 'products' && 'MACHINERY CAPABILITIES LIST'}
+                        {adminSubView === 'analytics' && 'INVENTORY PERFORMANCE ANALYTICS'}
+                        {adminSubView === 'add-product' && 'HOST NEW HEAVY MACHINERY'}
+                        {adminSubView === 'add-category' && 'DEFINE INDUSTRIAL CLASSIFICATION'}
+                        {adminSubView === 'users' && 'CUSTOMER AUDIT DIRECTORY'}
+                        {adminSubView === 'add-user' && 'ONBOARD REGIONAL OPERATORS'}
+                        {adminSubView === 'transactions' && 'MERCHANT REVENUE LEDGER'}
+                        {adminSubView === 'add-order' && 'DISPATCH MANUAL CARGO'}
+                        {adminSubView === 'keep' && 'GOOGLE KEEP NOTES'}
+                        {adminSubView === 'picker' && 'GOOGLE DRIVE FILE PICKER'}
+                      </h2>
+
+                      {/* TINY LAST SYNCED TIMESTAMP INDICATOR WITH SYNC-STATUS PULSE */}
+                      <div className="sync-status-indicator inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[11px] font-mono font-semibold shrink-0">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span>Last Synced: {lastSyncedTimestamp}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-500 font-mono mt-1">
                       Sdazum Global // Shandong Azum Import & Export Co., Ltd. // Terminal Admin Panel
                     </p>
                   </motion.div>
-                  <div className="flex items-center gap-2 print:hidden">
+
+                  <div className="flex flex-wrap items-center gap-2 shrink-0 print:hidden">
                     <button
                       onClick={() => {
+                        setLastSyncedTimestamp(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
                         triggerToast("Preparing printer-friendly report layout...", "success");
                         setTimeout(() => window.print(), 200);
                       }}
@@ -9354,6 +9371,24 @@ export default function App() {
                     >
                       <Printer className="w-4 h-4 text-indigo-400" />
                       <span>Print Report</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setLastSyncedTimestamp(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+                        triggerToast("Exporting catalog dataset to JSON...", "success");
+                        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(products, null, 2));
+                        const downloadAnchor = document.createElement('a');
+                        downloadAnchor.setAttribute("href", dataStr);
+                        downloadAnchor.setAttribute("download", `sdazum_catalog_export_${Date.now()}.json`);
+                        document.body.appendChild(downloadAnchor);
+                        downloadAnchor.click();
+                        downloadAnchor.remove();
+                      }}
+                      className="px-3.5 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/60 font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer transition-all hover:scale-102"
+                      title="Export dataset to JSON file"
+                    >
+                      <Download className="w-4 h-4 text-emerald-400" />
+                      <span>Export</span>
                     </button>
                     <button
                       onClick={() => setAdminSubView('add-product')}

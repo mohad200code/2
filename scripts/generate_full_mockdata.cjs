@@ -15,7 +15,7 @@ let imgVarNames = [];
 imageFiles.forEach((filename, idx) => {
   const sanitizeName = `img_item_${idx}_` + filename.replace(/[^a-zA-Z0-9]/g, '_');
   imgVarNames.push(sanitizeName);
-  importLines.push(`import ${sanitizeName} from './assets/products-image/${filename}';`);
+  importLines.push(`import ${sanitizeName} from './products-image/${filename}';`);
 });
 
 let fileContent = `/**
@@ -27,7 +27,7 @@ import { Product, User, Order } from './types';
 
 ${importLines.join('\n')}
 
-const imagesGlob = import.meta.glob('./assets/products-image/*.{png,jpg,jpeg,svg,webp,JPG,PNG,JPEG,PNG-1,jpg-1}', { eager: true, import: 'default' });
+const imagesGlob = import.meta.glob('./products-image/*.{png,jpg,jpeg,svg,webp,JPG,PNG,JPEG,PNG-1,jpg-1}', { eager: true, import: 'default' });
 
 export const ALL_UPLOADED_IMAGES = Object.entries(imagesGlob).map(([key, value]) => {
   const nameWithExt = key.substring(key.lastIndexOf('/') + 1);
