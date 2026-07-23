@@ -1038,6 +1038,143 @@ app.post("/api/products", (req, res) => {
   }
 });
 
+// Helper for Gemini AI product generation
+async function generateProductWithGemini(prompt: string, category?: string) {
+  const client = getGenAI();
+  let productDetails: any = null;
+
+  if (client) {
+    try {
+      const sysPrompt = `You are Gemini AI Product Engineer for Shandong Azum Import & Export Co., Ltd.
+Generate a realistic, detailed industrial/commercial product object based on user prompt: "${prompt}".
+${category ? `Preferred category: ${category}` : ''}
+Output ONLY raw JSON format matching this structure (no markdown formatting, no tick marks):
+{
+  "name": "Product Title in English",
+  "name_en": "Product Title in English",
+  "name_zh": "Product Title in Chinese",
+  "name_ar": "Product Title in Arabic",
+  "shortDescription": "Concise 1-sentence product summary in English",
+  "short_en": "Concise 1-sentence product summary in English",
+  "short_zh": "Concise 1-sentence product summary in Chinese",
+  "short_ar": "Concise 1-sentence product summary in Arabic",
+  "description": "Detailed multi-sentence technical description in English",
+  "desc_en": "Detailed multi-sentence technical description in English",
+  "desc_zh": "Detailed description in Chinese",
+  "desc_ar": "Detailed description in Arabic",
+  "price": 2400,
+  "category": "Agricultural machinery",
+  "sizes": ["Standard", "Heavy Duty"],
+  "colors": [{"name": "Industrial Grey", "value": "#475569"}, {"name": "Machine Blue", "value": "#1E3A8A"}],
+  "stock": 20
+}`;
+
+      const response = await client.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents: [{ text: sysPrompt }],
+      });
+
+      const rawText = response.text || "";
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        productDetails = JSON.parse(jsonMatch[0]);
+      }
+    } catch (geminiErr) {
+      console.warn("[GEMINI PRODUCT GENERATION FALLBACK]", geminiErr);
+    }
+  }
+
+  if (!productDetails) {
+    const cleanPrompt = prompt.trim();
+    const priceMatch = cleanPrompt.match(/\$?\b(\d[\d,.]*)\b/);
+    const parsedPrice = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : 2500;
+
+    productDetails = {
+      name: cleanPrompt.charAt(0).toUpperCase() + cleanPrompt.slice(1),
+      name_en: cleanPrompt,
+      name_zh: `${cleanPrompt} (山东Azum智造)`,
+      name_ar: `${cleanPrompt} (تصنيع أزويم المخصص)`,
+      shortDescription: `${cleanPrompt} - High performance industrial machinery by Shandong Azum.`,
+      short_en: `${cleanPrompt} - High performance industrial machinery by Shandong Azum.`,
+      short_zh: `${cleanPrompt} - 山东阿祖姆高性能工业级设备。`,
+      short_ar: `${cleanPrompt} - معدات صناعية عالية الأداء من أزويم.`,
+      description: `${cleanPrompt} manufactured with high-precision materials and aerospace-grade components. Fully tested for durability under heavy loads.`,
+      desc_en: `${cleanPrompt} manufactured with high-precision materials and aerospace-grade components. Fully tested for durability under heavy loads.`,
+      desc_zh: `${cleanPrompt} 采用高精度材料和航天级部件制造。经过重载耐久性测试。`,
+      desc_ar: `${cleanPrompt} مصنعة بمواد عالية الدقة ومكونات درجة الطيران. مختبرة بالكامل للمتانة.`,
+      price: parsedPrice > 0 ? parsedPrice : 1850,
+      category: category || "Other equipment",
+      sizes: ["Standard", "Heavy Duty"],
+      colors: [{ name: "Titanium Grey", value: "#475569" }, { name: "Cyan Metallic", value: "#00f0ff" }],
+      stock: 18
+    };
+  }
+
+  let chosenImg = "";
+  try {
+    const imgDir = path.join(process.cwd(), "src/products-image");
+    if (fs.existsSync(imgDir)) {
+      const files = fs.readdirSync(imgDir).filter(f => f.endsWith(".jpg") || f.endsWith(".png") || f.endsWith(".jpeg") || f.endsWith(".webp"));
+      if (files.length > 0) {
+        const randomFile = files[Math.floor(Math.random() * files.length)];
+        chosenImg = `/products-image/${randomFile}`;
+      }
+    }
+  } catch (err) {}
+
+  const newProduct = {
+    id: `prod-gemini-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    name: productDetails.name || prompt,
+    name_en: productDetails.name_en || productDetails.name || prompt,
+    name_zh: productDetails.name_zh || productDetails.name || prompt,
+    name_ar: productDetails.name_ar || productDetails.name || prompt,
+    shortDescription: productDetails.shortDescription || `${prompt} - High quality machinery.`,
+    short_en: productDetails.short_en || productDetails.shortDescription || `${prompt} - High quality machinery.`,
+    short_zh: productDetails.short_zh || `${prompt} - 高品质工业设备。`,
+    short_ar: productDetails.short_ar || `${prompt} - معدات صناعية عالية الجودة。`,
+    description: productDetails.description || `${prompt} engineered by Shandong Azum.`,
+    desc_en: productDetails.desc_en || productDetails.description || `${prompt} engineered by Shandong Azum.`,
+    desc_zh: productDetails.desc_zh || `${prompt} 山东阿祖姆精密制造。`,
+    desc_ar: productDetails.desc_ar || `${prompt} تم تصنيعها بواسطة شاندونغ أزويم.`,
+    price: typeof productDetails.price === 'number' && productDetails.price > 0 ? productDetails.price : 1999,
+    category: productDetails.category || category || "Other equipment",
+    sizes: Array.isArray(productDetails.sizes) ? productDetails.sizes : ["Standard", "Heavy Duty"],
+    colors: Array.isArray(productDetails.colors) ? productDetails.colors : [{ name: "Industrial Grey", value: "#475569" }],
+    image: chosenImg || "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=600",
+    rating: 5.0,
+    salesCount: 1,
+    stock: productDetails.stock || 20
+  };
+
+  let existingProducts: any[] = [];
+  if (fs.existsSync(PRODUCTS_DB_PATH)) {
+    try {
+      existingProducts = JSON.parse(fs.readFileSync(PRODUCTS_DB_PATH, "utf-8"));
+      if (!Array.isArray(existingProducts)) existingProducts = [];
+    } catch (e) {
+      existingProducts = [];
+    }
+  }
+  existingProducts = [newProduct, ...existingProducts];
+  fs.writeFileSync(PRODUCTS_DB_PATH, JSON.stringify(existingProducts, null, 2), "utf-8");
+
+  return newProduct;
+}
+
+// AI PRODUCT GENERATION ENDPOINT
+app.post("/api/ai/generate-product", async (req, res) => {
+  try {
+    const { prompt, category } = req.body;
+    if (!prompt || typeof prompt !== "string") {
+      return res.status(400).json({ error: "Prompt is required." });
+    }
+    const product = await generateProductWithGemini(prompt, category);
+    return res.json({ success: true, product });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Search query translation API to support dynamic multilingual search fallback
 app.post("/api/translate-query", async (req, res) => {
   try {
@@ -1558,6 +1695,28 @@ app.post("/api/gemini/chat", async (req, res) => {
       cleanedPrompt.includes('generate video') || cleanedPrompt.includes('make video') || cleanedPrompt.includes('create video') || 
       cleanedPrompt.includes('generate clip') || cleanedPrompt.includes('animate video') || cleanedPrompt.includes('فيديو') || 
       cleanedPrompt.includes('مقطع فيديو') || cleanedPrompt.includes('أنشئ فيديو') || cleanedPrompt.includes('生成视频') || cleanedPrompt.includes('制作视频');
+
+    const isProductGenIntent = cleanedPrompt.includes('create product') ||
+      cleanedPrompt.includes('generate product') ||
+      cleanedPrompt.includes('add product') ||
+      cleanedPrompt.includes('add a product') ||
+      cleanedPrompt.includes('make a product') ||
+      cleanedPrompt.includes('create a product') ||
+      cleanedPrompt.includes('generate a product') ||
+      cleanedPrompt.includes('new product') ||
+      cleanedPrompt.includes('أضف منتج') ||
+      cleanedPrompt.includes('أنشئ منتج') ||
+      cleanedPrompt.includes('إضافة منتج') ||
+      cleanedPrompt.includes('添加产品') ||
+      cleanedPrompt.includes('生成产品');
+
+    if (isProductGenIntent) {
+      const newProd = await generateProductWithGemini(prompt);
+      return res.json({
+        text: `✨ Gemini AI has generated and saved **${newProd.name}** ($${newProd.price}) into your store catalog! You can view and manage it in your storefront now.`,
+        createdProduct: newProd
+      });
+    }
 
     const client = getGenAI();
 

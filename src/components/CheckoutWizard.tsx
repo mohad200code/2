@@ -7,6 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Trash2, ShoppingBag, MapPin, CreditCard, ChevronRight, Check } from 'lucide-react';
 import { CartItem, Order } from '../types';
 import { ProductSVG } from './ProductSVG';
+import { getProductImageUrl } from '../mockData';
 
 interface CheckoutWizardProps {
   cart: CartItem[];
@@ -570,7 +571,7 @@ export const CheckoutWizard: React.FC<CheckoutWizardProps> = ({
                   <div className="w-24 h-24 bg-slate-50 border border-slate-150 rounded-2xl flex items-center justify-center p-2 shrink-0 overflow-hidden">
                     {item.product.image && (item.product.image.startsWith('http://') || item.product.image.startsWith('https://') || item.product.image.includes('/')) ? (
                       <img
-                        src={item.product.image}
+                        src={getProductImageUrl(item.product.image)}
                         alt={item.product.name}
                         className="w-full h-full object-cover rounded-xl"
                         referrerPolicy="no-referrer"
@@ -1059,7 +1060,7 @@ export const CheckoutWizard: React.FC<CheckoutWizardProps> = ({
                   <div className="w-14 h-14 bg-white border border-slate-150 rounded-xl flex items-center justify-center p-1 shrink-0 overflow-hidden">
                     {item.product.image && (item.product.image.startsWith('http://') || item.product.image.startsWith('https://') || item.product.image.includes('/')) ? (
                       <img
-                        src={item.product.image}
+                        src={getProductImageUrl(item.product.image)}
                         alt={item.product.name}
                         className="w-full h-full object-cover rounded-lg"
                         referrerPolicy="no-referrer"

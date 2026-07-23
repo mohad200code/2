@@ -16,41 +16,17 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   referrerPolicy,
   theme = 'cyberpunk'
 }) => {
-  const [isIntersected, setIsIntersected] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(() => getProductImageUrl(src));
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const resolvedSrc = getProductImageUrl(src);
-
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.IntersectionObserver) {
-      setIsIntersected(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsIntersected(true);
-          observer.disconnect();
-        }
-      },
-      {
-        rootMargin: '150px',
-        threshold: 0.01,
-      }
-    );
-
-    const currentRef = containerRef.current;
-    if (currentRef) {
-      observer.observe(currentRef);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
+    const resolved = getProductImageUrl(src);
+    setCurrentSrc(resolved);
+    setIsLoaded(false);
+    setHasError(false);
+  }, [src]);
 
   const containerBg = theme === 'day' 
     ? 'bg-slate-50 border border-slate-100' 
@@ -60,8 +36,8 @@ export const LazyImage: React.FC<LazyImageProps> = ({
 
   return (
     <div ref={containerRef} className={`relative w-full h-full overflow-hidden rounded-2xl ${containerBg}`}>
-      {/* Premium Skeleton Screen */}
-      {(!isIntersected || !isLoaded) && (
+      {/* Skeleton Screen while loading */}
+      {!isLoaded && !hasError && (
         <div className={`absolute inset-0 z-10 flex flex-col justify-between p-4 animate-pulse ${
           theme === 'day' 
             ? 'bg-slate-100' 
@@ -87,28 +63,20 @@ export const LazyImage: React.FC<LazyImageProps> = ({
       )}
 
       {/* Actual Image */}
-      {isIntersected && (
-        <img
-          src={resolvedSrc}
-          alt={alt}
-          onLoad={() => setIsLoaded(true)}
-          onError={(e) => {
-            setHasError(true);
-            // Fallback to static served path or placeholder if image fails
-            const target = e.currentTarget;
-            if (!target.src.includes('/products-image/')) {
-              const filename = resolvedSrc.split('/').pop();
-              if (filename) {
-                target.src = `/src/products-image/${filename}`;
-              }
-            }
-          }}
-          className={`${className} transition-all duration-700 ease-out ${
-            isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'
-          }`}
-          referrerPolicy={referrerPolicy}
-        />
-      )}
+      <img
+        src={currentSrc}
+        alt={alt}
+        loading="lazy"
+        onLoad={() => setIsLoaded(true)}
+        onError={() => {
+          setHasError(true);
+          setIsLoaded(true); // Clear skeleton
+        }}
+        className={`${className} transition-all duration-500 ease-out ${
+          isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'
+        }`}
+        referrerPolicy={referrerPolicy}
+      />
     </div>
   );
 };

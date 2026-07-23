@@ -71,6 +71,7 @@ import {
   Power,
   RefreshCw,
   RotateCcw,
+  Loader2,
   ThumbsUp,
   ThumbsDown,
   MoreVertical,
@@ -1070,17 +1071,15 @@ export default function App() {
       try {
         const parsed = JSON.parse(savedProducts);
         if (Array.isArray(parsed)) {
-          return parsed.map((p: Product) => ({
+          const userProds = parsed.filter((p: Product) => !p.id.startsWith('prod-sdazum-'));
+          return userProds.map((p: Product) => ({
             ...p,
             image: getProductImageUrl(p.image)
           }));
         }
       } catch (e) {}
     }
-    return INITIAL_PRODUCTS.map(p => ({
-      ...p,
-      image: getProductImageUrl(p.image)
-    }));
+    return [];
   });
 
   // Load products from backend server on initialization for synchronized state across all users
@@ -1093,7 +1092,8 @@ export default function App() {
         }
         const data = await res.json();
         if (data.success && data.products !== null && Array.isArray(data.products)) {
-          setProducts(data.products.map((p: Product) => ({
+          const userProds = data.products.filter((p: Product) => !p.id.startsWith('prod-sdazum-'));
+          setProducts(userProds.map((p: Product) => ({
             ...p,
             image: getProductImageUrl(p.image)
           })));
@@ -1885,6 +1885,9 @@ export default function App() {
 
   // Slide-out Drawer for Admin: Add Product
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
+  const [isAiGenerateModalOpen, setIsAiGenerateModalOpen] = useState(false);
+  const [aiGeneratePrompt, setAiGeneratePrompt] = useState('');
+  const [isGeneratingAiProduct, setIsGeneratingAiProduct] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   
   // Command palette states
@@ -4360,6 +4363,36 @@ export default function App() {
     });
   };
 
+  // Handler for Gemini AI product generation
+  const handleAiGenerateProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aiGeneratePrompt.trim()) {
+      triggerToast("Please describe the product you want Gemini to generate!", "error");
+      return;
+    }
+    setIsGeneratingAiProduct(true);
+    try {
+      const res = await fetch("/api/ai/generate-product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: aiGeneratePrompt.trim() })
+      });
+      const data = await res.json();
+      if (data.success && data.product) {
+        setProducts(prev => [data.product, ...prev]);
+        triggerToast(`✨ Gemini created and saved "${data.product.name}" ($${data.product.price})!`, "success");
+        setIsAiGenerateModalOpen(false);
+        setAiGeneratePrompt('');
+      } else {
+        throw new Error(data.error || "Generation failed");
+      }
+    } catch (err: any) {
+      triggerToast(`Error generating product: ${err.message}`, "error");
+    } finally {
+      setIsGeneratingAiProduct(false);
+    }
+  };
+
   const captureCameraFrame = (): string | null => {
     if (!videoRef.current || !isCameraOn) return null;
     try {
@@ -4424,6 +4457,10 @@ export default function App() {
     })
       .then(async (res) => {
         const data = await res.json();
+        if (data.createdProduct) {
+          setProducts(prev => [data.createdProduct, ...prev.filter(p => p.id !== data.createdProduct.id)]);
+          triggerToast(`✨ Gemini added "${data.createdProduct.name}" to your store catalog!`, "success");
+        }
         if (data.text) {
           let aiResponseText = data.text;
           let triggerYoutube = false;
@@ -5546,13 +5583,6 @@ export default function App() {
                                 alt={p.name}
                                 className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
-                                onError={(e) => {
-                                  const target = e.currentTarget;
-                                  if (!target.src.includes('/products-image/')) {
-                                    const filename = p.image?.split('/').pop();
-                                    if (filename) target.src = `/src/products-image/${filename}`;
-                                  }
-                                }}
                               />
                             ) : (
                               <div className="w-full h-full bg-slate-900/60 flex items-center justify-center rounded-2xl">
@@ -6115,6 +6145,28 @@ export default function App() {
                     <span>{bulkTagMode ? 'Cancel Bulk Tag' : 'Bulk Tag'}</span>
                   </button>
 
+                  <button
+                    onClick={() => setIsAiGenerateModalOpen(true)}
+                    className="px-3.5 py-2 text-xs font-bold font-sans uppercase rounded-xl transition-all cursor-pointer flex items-center gap-1.5 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white shadow-lg shadow-pink-500/20 hover:scale-105"
+                    title="Generate new product with Gemini AI"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>✨ AI Generate</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsAddProductOpen(true)}
+                    className={`px-3 py-2 text-xs font-bold font-sans uppercase rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      theme === 'day'
+                        ? 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800'
+                    }`}
+                    title="Add new product manually"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-pink-400" />
+                    <span>Add Item</span>
+                  </button>
+
 
                 </div>
               </div>
@@ -6270,33 +6322,24 @@ export default function App() {
                   </div>
                   <h3 className="text-lg font-bold mb-2 uppercase font-mono tracking-wider">No Heavy Machinery Available</h3>
                   <p className="text-xs text-slate-400 max-w-md mx-auto mb-6">
-                    The factory portal is currently empty. Start hosting custom parts and industrial machinery to populate the Sdazum Cyberport.
+                    Your product catalog is ready. Use Gemini AI to generate products from natural language prompts, or add products manually to your saved store database.
                   </p>
-                  <button
-                    onClick={() => {
-                      if (!currentUser) {
-                        triggerToast("Please login / signup first to post custom items!", "error");
-                        setAuthIsSignUp(false);
-                        setView('auth');
-                      } else {
-                        if (!isMohab) {
-                          triggerToast("Access Denied: Only primary admin (Mohab) can host new products.", "error");
-                          return;
-                        }
-                        setView('admin');
-                        setIsAddProductOpen(true);
-                      }
-                    }}
-                    className={`px-5 py-2.5 font-bold text-xs uppercase tracking-wider rounded-xl transition-all hover:scale-105 cursor-pointer ${
-                      theme === 'cyberpunk' 
-                        ? 'bg-pink-500 text-white hover:bg-pink-600 glow-pink' 
-                        : theme === 'day' 
-                          ? 'bg-slate-900 text-white hover:bg-slate-800' 
-                          : 'bg-indigo-600 text-white hover:bg-indigo-500'
-                    }`}
-                  >
-                    Host First Item
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={() => setIsAiGenerateModalOpen(true)}
+                      className="px-5 py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all hover:scale-105 cursor-pointer shadow-lg shadow-pink-500/25 flex items-center gap-2"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Generate Product with Gemini</span>
+                    </button>
+                    <button
+                      onClick={() => setIsAddProductOpen(true)}
+                      className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition-all hover:scale-105 cursor-pointer flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4 text-pink-400" />
+                      <span>Add Product Manually</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <motion.div 
@@ -6864,7 +6907,7 @@ export default function App() {
               <div className="w-full overflow-hidden rounded-[32px] relative group">
                 {selectedProduct.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(selectedProduct.image) ? (
                   <img
-                    src={selectedProduct.image}
+                    src={getProductImageUrl(selectedProduct.image)}
                     alt={selectedProduct.name}
                     className="w-full h-auto max-h-[600px] object-cover rounded-[32px] hover:scale-105 transition-transform duration-500"
                     referrerPolicy="no-referrer"
@@ -7539,7 +7582,7 @@ export default function App() {
                                           <li key={idx} className="list-none">
                                             <div className="flex items-center gap-3 py-1">
                                               <img
-                                                src={item.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(item.image) ? item.image : `https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=100`}
+                                                src={item.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(item.image) ? getProductImageUrl(item.image) : `https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&q=80&w=100`}
                                                 alt={item.name}
                                                 className="w-10 h-10 object-cover rounded-lg border border-slate-800 shrink-0 bg-slate-900"
                                               />
@@ -10211,7 +10254,7 @@ export default function App() {
                                     <td className="p-3">
                                       <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center shrink-0 overflow-hidden border border-slate-850 p-0.5">
                                         {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
-                                          <img src={p.image} alt={p.name} className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
+                                          <img src={getProductImageUrl(p.image)} alt={p.name} className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
                                         ) : (
                                           <ProductSVG type={p.image} color={p.colors?.[0]?.value || '#94A3B8'} className="w-6 h-6" />
                                         )}
@@ -11052,7 +11095,7 @@ export default function App() {
                       {editingProduct.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(editingProduct.image) ? (
                         <div className="mt-2 w-20 h-20 rounded-xl overflow-hidden border border-slate-800 bg-slate-950 p-1 relative">
                           <img 
-                            src={editingProduct.image} 
+                            src={getProductImageUrl(editingProduct.image)} 
                             alt="Uploaded preview" 
                             className="w-full h-full object-cover rounded-lg"
                           />
@@ -14220,6 +14263,78 @@ export default function App() {
         </div>
       </footer>
 
+      {/* GEMINI AI PRODUCT GENERATOR MODAL */}
+      {isAiGenerateModalOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-lg bg-slate-950 border border-pink-500/40 rounded-2xl p-6 shadow-2xl text-white font-mono text-xs space-y-5"
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-pink-500 animate-pulse" />
+                <h3 className="font-black text-base uppercase tracking-tight text-white">Gemini AI Product Generator</h3>
+              </div>
+              <button 
+                onClick={() => setIsAiGenerateModalOpen(false)}
+                className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Describe any industrial machine, part, or custom equipment. Gemini AI will automatically generate specifications, multilingual translations (EN, ZH, AR), pricing, and save it directly into your store catalog.
+            </p>
+
+            <form onSubmit={handleAiGenerateProductSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-pink-400">
+                  Product Description or Prompt
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="E.g. A 1000W fiber laser tube cutting machine with automated feeder, priced at $12,500..."
+                  value={aiGeneratePrompt}
+                  onChange={(e) => setAiGeneratePrompt(e.target.value)}
+                  className="w-full p-3 bg-slate-900 border border-slate-800 focus:border-pink-500 rounded-xl outline-none text-xs text-white resize-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAiGenerateModalOpen(false)}
+                  className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer text-center"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isGeneratingAiProduct}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isGeneratingAiProduct ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Generating with Gemini...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Generate & Save Product</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
       {/* SLIDE-OUT DRAWER OVERLAY: ADD PRODUCT (Supports User Custom Addition) */}
       {isAddProductOpen && (
         <div id="add-product-backdrop" className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex justify-end">
@@ -14659,7 +14774,7 @@ export default function App() {
               <div className="space-y-4">
                 <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-950/40 border border-slate-800">
                   {quickViewProduct.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(quickViewProduct.image) ? (
-                    <img src={quickViewProduct.image} alt={quickViewProduct.name} className="w-full h-full object-cover" />
+                    <img src={getProductImageUrl(quickViewProduct.image)} alt={quickViewProduct.name} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center p-6">
                       <ProductSVG type={quickViewProduct.image} color={quickViewProduct.colors?.[0]?.value || '#94A3B8'} className="w-32 h-32" />
@@ -15111,7 +15226,7 @@ export default function App() {
                           </button>
                           <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center p-1">
                             {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
-                              <img src={p.image} alt={p.name} className="w-full h-full object-cover rounded" />
+                              <img src={getProductImageUrl(p.image)} alt={p.name} className="w-full h-full object-cover rounded" />
                             ) : (
                               <ProductSVG type={p.image} color={p.colors?.[0]?.value || '#94A3B8'} className="w-full h-full" />
                             )}
@@ -15365,7 +15480,7 @@ export default function App() {
                 } flex items-center gap-3`}>
                   {priceAlertProduct.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(priceAlertProduct.image) ? (
                     <img
-                      src={priceAlertProduct.image}
+                      src={getProductImageUrl(priceAlertProduct.image)}
                       alt={priceAlertProduct.name}
                       className="w-12 h-12 object-cover rounded-xl"
                       referrerPolicy="no-referrer"

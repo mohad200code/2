@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { X, Layers, Star, Info, ShieldCheck, Check } from 'lucide-react';
 import { Product } from '../types';
 import { ProductSVG } from './ProductSVG';
+import { getProductImageUrl } from '../mockData';
 
 interface ProductCompareModalProps {
   products: Product[];
@@ -136,7 +137,7 @@ export const ProductCompareModal: React.FC<ProductCompareModalProps> = ({
 
                 <div className="aspect-square w-24 h-24 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-950/30 p-2 flex items-center justify-center mx-auto">
                   {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
-                    <img src={p.image} alt={p.name} className="w-full h-full object-cover rounded-lg" />
+                    <img src={getProductImageUrl(p.image)} alt={p.name} className="w-full h-full object-cover rounded-lg" />
                   ) : (
                     <ProductSVG type={p.image} color={p.colors?.[0]?.value || '#94A3B8'} className="w-16 h-16" />
                   )}
