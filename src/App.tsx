@@ -71,6 +71,7 @@ import {
   Power,
   RefreshCw,
   RotateCcw,
+  History,
   Loader2,
   ThumbsUp,
   ThumbsDown,
@@ -103,7 +104,6 @@ import {
   Video,
   Image,
   FolderHeart,
-  History,
   Menu,
   Grid,
   HardDrive,
@@ -1380,17 +1380,117 @@ export default function App() {
     return () => clearInterval(interval);
   }, [productsKey]);
 
-  // Inventory Stock change flashing / blinking detector
+  // Stock level change direction & magnitude animation tracking
+  const [stockChangeMap, setStockChangeMap] = useState<Record<string, { type: 'increase' | 'decrease'; delta: number; timestamp: number }>>({});
+
+  // Catalog Automated Periodic Backup & Restore Engine
+  const [backupHistory, setBackupHistory] = useState<Array<{
+    id: string;
+    timestamp: string;
+    productCount: number;
+    products: Product[];
+    type: 'auto' | 'manual';
+  }>>(() => {
+    try {
+      const saved = localStorage.getItem('azum_catalog_backups');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [lastBackupTime, setLastBackupTime] = useState<string | null>(() => {
+    return localStorage.getItem('azum_last_backup_time') || null;
+  });
+
+  const [isAutoBackupEnabled, setIsAutoBackupEnabled] = useState<boolean>(() => {
+    return localStorage.getItem('azum_auto_backup_enabled') !== 'false';
+  });
+
+  const createBackupSnapshot = useCallback((type: 'auto' | 'manual' = 'auto') => {
+    if (!products || products.length === 0) return;
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const dateStr = now.toLocaleDateString();
+    const timestamp = `${timeStr} (${dateStr})`;
+
+    const newSnapshot = {
+      id: `backup-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp,
+      productCount: products.length,
+      products: JSON.parse(JSON.stringify(products)),
+      type
+    };
+
+    setBackupHistory(prev => {
+      const filtered = prev.filter(b => b.id !== newSnapshot.id);
+      const updated = [newSnapshot, ...filtered].slice(0, 20); // Keep last 20 snapshots
+      try {
+        localStorage.setItem('azum_catalog_backups', JSON.stringify(updated));
+        localStorage.setItem('azum_catalog_backup_latest', JSON.stringify(newSnapshot));
+        localStorage.setItem('azum_last_backup_time', timestamp);
+      } catch (e) {}
+      return updated;
+    });
+
+    setLastBackupTime(timestamp);
+
+    if (type === 'manual') {
+      triggerToast(`✨ Manual Catalog Backup Created (${products.length} items saved)!`, "success");
+    }
+  }, [products]);
+
+  const restoreCatalogFromBackup = async (backup: { timestamp: string; products: Product[] }) => {
+    if (!backup || !Array.isArray(backup.products) || backup.products.length === 0) {
+      triggerToast("Error: Selected backup snapshot is empty or invalid.", "error");
+      return;
+    }
+
+    setProducts(backup.products);
+
+    try {
+      await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ products: backup.products })
+      });
+    } catch (err) {
+      console.warn("Server sync on restore failed, restored local state.", err);
+    }
+
+    triggerToast(`🎉 Catalog restored from snapshot (${backup.products.length} items loaded from ${backup.timestamp})!`, "success");
+  };
+
+  // Periodic Auto-Backup interval (every 60s)
+  useEffect(() => {
+    if (!isAutoBackupEnabled || !products || products.length === 0) return;
+    const interval = setInterval(() => {
+      createBackupSnapshot('auto');
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [products, isAutoBackupEnabled, createBackupSnapshot]);
+
+  // Inventory Stock change animation & direction detector
   const prevStockRef = useRef<Record<string, number>>({});
   useEffect(() => {
     products.forEach(p => {
       const prevStock = prevStockRef.current[p.id];
-      if (prevStock !== undefined && prevStock !== p.stock) {
+      const currentStock = p.stock !== undefined ? p.stock : 0;
+      if (prevStock !== undefined && prevStock !== currentStock) {
+        const delta = currentStock - prevStock;
+        const type = delta > 0 ? 'increase' : 'decrease';
+        setStockChangeMap(prev => ({
+          ...prev,
+          [p.id]: { type, delta, timestamp: Date.now() }
+        }));
         setBlinkProductId(p.id);
-        const timer = setTimeout(() => setBlinkProductId(null), 1800);
-        prevStockRef.current[p.id] = p.stock || 0;
+        const timer = setTimeout(() => setBlinkProductId(null), 2200);
+        prevStockRef.current[p.id] = currentStock;
       } else if (prevStock === undefined) {
-        prevStockRef.current[p.id] = p.stock || 0;
+        prevStockRef.current[p.id] = currentStock;
       }
     });
   }, [products]);
@@ -4290,6 +4390,175 @@ export default function App() {
     triggerToast("Catalog fully reset: all custom tags cleared, stock alert thresholds set to default, and all temporary visual states removed.", "success");
   };
 
+  const handlePrintCatalog = () => {
+    if (!filteredProducts || filteredProducts.length === 0) {
+      triggerToast("No products available in the current catalog view to print.", "error");
+      return;
+    }
+
+    const printWindow = window.open('', '_blank', 'width=1000,height=800');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+
+    const activeCatLabel = activeCategory === 'All' ? 'Full Product Catalog' : `${activeCategory} Machinery`;
+    const filterLabel = catalogTagFilter !== 'all' ? ` (Filter: ${catalogTagFilter})` : '';
+    const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+
+    const rowsHtml = filteredProducts.map((p, idx) => `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 10px; font-weight: bold; color: #475569; text-align: center;">${idx + 1}</td>
+        <td style="padding: 10px; text-align: center;">
+          ${p.image ? `<img src="${p.image}" alt="${p.name}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1;" />` : '<div style="width:48px;height:48px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#94a3b8;">No Img</div>'}
+        </td>
+        <td style="padding: 10px;">
+          <div style="font-weight: 800; font-size: 13px; color: #0f172a;">${p.name}</div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 2px;">SKU / Part #: <span style="font-family: monospace; font-weight: bold;">${p.sku || p.id || 'N/A'}</span></div>
+          ${p.description ? `<div style="font-size: 10px; color: #64748b; margin-top: 3px; max-width: 360px;">${p.description.substring(0, 120)}${p.description.length > 120 ? '...' : ''}</div>` : ''}
+        </td>
+        <td style="padding: 10px; font-size: 12px; color: #334155; font-weight: 600;">${p.category || 'Machinery'}</td>
+        <td style="padding: 10px; text-align: center;">
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 700; font-family: monospace; ${ (p.stock || 0) < 15 ? 'background: #ffe4e6; color: #e11d48;' : 'background: #f1f5f9; color: #1e293b;' }">
+            ${p.stock !== undefined ? p.stock : 0} units
+          </span>
+        </td>
+        <td style="padding: 10px; text-align: right; font-weight: 800; font-size: 13px; color: #2563eb; font-family: monospace;">
+          $${Number(p.price || 0).toLocaleString()}
+        </td>
+      </tr>
+    `).join('');
+
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Azum Cyberport - Printable Product Catalog Summary</title>
+          <style>
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .no-print { display: none !important; }
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+              color: #0f172a;
+              margin: 0;
+              padding: 24px;
+              background: #ffffff;
+            }
+            .header {
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              border-bottom: 2px solid #0f172a;
+              padding-bottom: 16px;
+              margin-bottom: 20px;
+            }
+            .brand-title {
+              font-size: 20px;
+              font-weight: 900;
+              letter-spacing: -0.5px;
+              text-transform: uppercase;
+              color: #0f172a;
+            }
+            .brand-subtitle {
+              font-size: 11px;
+              color: #64748b;
+              margin-top: 2px;
+            }
+            .meta {
+              text-align: right;
+              font-size: 11px;
+              color: #475569;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+            }
+            th {
+              background-color: #f8fafc;
+              border-bottom: 2px solid #cbd5e1;
+              padding: 10px;
+              font-size: 11px;
+              font-weight: 800;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              color: #475569;
+            }
+            .footer {
+              margin-top: 30px;
+              border-top: 1px solid #e2e8f0;
+              padding-top: 12px;
+              display: flex;
+              justify-content: space-between;
+              font-size: 10px;
+              color: #94a3b8;
+            }
+            .print-btn {
+              background: #0f172a;
+              color: #ffffff;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 8px;
+              font-weight: 700;
+              font-size: 12px;
+              cursor: pointer;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="brand-title">Shandong Azum Import & Export Co., Ltd.</div>
+              <div class="brand-subtitle">Industrial Machinery & Precision Spare Parts Catalog</div>
+            </div>
+            <div class="meta">
+              <button onclick="window.print()" class="print-btn no-print">🖨️ Print Catalog / Save PDF</button>
+              <div style="margin-top: 8px; font-weight: 700;">Date: ${dateStr}</div>
+              <div>Category: ${activeCatLabel}${filterLabel}</div>
+              <div>Total Visible Items: ${filteredProducts.length}</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 40px; text-align: center;">#</th>
+                <th style="width: 60px; text-align: center;">Preview</th>
+                <th style="text-align: left;">Item Description & Specifications</th>
+                <th style="width: 120px; text-align: left;">Category</th>
+                <th style="width: 100px; text-align: center;">Stock</th>
+                <th style="width: 110px; text-align: right;">Unit Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <div>Azum Cyberport Industrial Platform — Official Catalog Summary</div>
+            <div>Representative: Altayeb Yousif Dafalla</div>
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 400);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(content);
+    printWindow.document.close();
+    triggerToast("Printer-friendly catalog summary generated!", "success");
+  };
+
   // Handler for custom product uploads
   const handleAddProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -6146,6 +6415,19 @@ export default function App() {
                   </button>
 
                   <button
+                    onClick={handlePrintCatalog}
+                    className={`px-3 py-2 text-xs font-bold font-sans uppercase rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      theme === 'day'
+                        ? 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-xs'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 shadow-xs'
+                    }`}
+                    title="Print or export clean, printer-friendly summary of visible catalog products"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Print Catalog</span>
+                  </button>
+
+                  <button
                     onClick={() => setIsAiGenerateModalOpen(true)}
                     className="px-3.5 py-2 text-xs font-bold font-sans uppercase rounded-xl transition-all cursor-pointer flex items-center gap-1.5 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white shadow-lg shadow-pink-500/20 hover:scale-105"
                     title="Generate new product with Gemini AI"
@@ -6343,6 +6625,7 @@ export default function App() {
                 </div>
               ) : (
                 <motion.div 
+                  key={`catalog-grid-${activeCategory}-${catalogTagFilter}-${sortBy}-${searchTerm}-${filteredProducts.length}`}
                   variants={{
                     hidden: { opacity: 0 },
                     show: {
@@ -6703,16 +6986,33 @@ export default function App() {
                                 🔥 {recentViews[p.id] || 42} views
                               </span>
 
-                              {/* Stock Display with brief highlight effect on value change */}
-                              <span className={`px-1.5 py-0.5 border rounded text-[9px] font-bold font-mono transition-all duration-300 flex items-center gap-1 ${
-                                blinkProductId === p.id 
-                                  ? 'animate-stock-highlight text-amber-300' 
-                                  : (p.stock !== undefined && p.stock < 15)
-                                    ? theme === 'day' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                    : theme === 'day' ? 'bg-slate-100 text-slate-800 border-slate-300 font-extrabold' : 'bg-slate-900/60 text-slate-300 border-slate-800'
-                              }`}>
-                                📦 {p.stock !== undefined ? `${p.stock} units` : '0 units'}
-                              </span>
+                              {/* Stock Display with directional CSS animations for stock increase/decrease */}
+                              {(() => {
+                                const stockInfo = stockChangeMap[p.id];
+                                const isAnimating = stockInfo && (Date.now() - stockInfo.timestamp < 2500);
+                                const isIncrease = stockInfo?.type === 'increase';
+
+                                return (
+                                  <span className={`px-2 py-0.5 border rounded text-[9px] font-bold font-mono transition-all duration-300 flex items-center gap-1 ${
+                                    isAnimating
+                                      ? isIncrease
+                                        ? 'animate-stock-increase bg-emerald-500/25 text-emerald-300 border-emerald-400 font-black shadow-[0_0_16px_rgba(16,185,129,0.7)]'
+                                        : 'animate-stock-decrease bg-rose-500/25 text-rose-300 border-rose-400 font-black shadow-[0_0_16px_rgba(244,63,94,0.7)]'
+                                      : (p.stock !== undefined && p.stock < 15)
+                                        ? theme === 'day' ? 'bg-rose-50 text-rose-700 border-rose-200 font-bold' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                        : theme === 'day' ? 'bg-slate-100 text-slate-800 border-slate-300 font-extrabold' : 'bg-slate-900/60 text-slate-300 border-slate-800'
+                                  }`}>
+                                    📦 {p.stock !== undefined ? `${p.stock} units` : '0 units'}
+                                    {isAnimating && (
+                                      <span className={`ml-0.5 px-1 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${
+                                        isIncrease ? 'bg-emerald-500 text-slate-950 animate-bounce' : 'bg-rose-500 text-white animate-pulse'
+                                      }`}>
+                                        {isIncrease ? `↑ +${stockInfo.delta}` : `↓ ${stockInfo.delta}`}
+                                      </span>
+                                    )}
+                                  </span>
+                                );
+                              })()}
                             </div>
 
                             <h4 
@@ -9667,39 +9967,278 @@ export default function App() {
 
                   case 'settings':
                     return (
-                      <div className="bg-[#0a0b10] p-6 rounded-2xl border border-slate-800 shadow-xl grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                          <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider font-mono">
-                            ⚙️ System Configuration
-                          </h3>
-                          <div className="p-4 bg-slate-900/40 border border-slate-800 rounded-xl space-y-3 text-xs">
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Merchant Gateway Status:</span>
-                              <span className="text-emerald-400 font-bold">● Operational</span>
+                      <div className="space-y-6">
+                        {/* Top system status & credentials grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-[#0a0b10] p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-2">
+                              <span>⚙️ System Configuration</span>
+                            </h3>
+                            <div className="p-4 bg-slate-900/40 border border-slate-800 rounded-xl space-y-3 text-xs font-mono">
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Merchant Gateway Status:</span>
+                                <span className="text-emerald-400 font-bold">● Operational</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Automated Backup System:</span>
+                                <span className={isAutoBackupEnabled ? "text-emerald-400 font-bold" : "text-amber-400 font-bold"}>
+                                  {isAutoBackupEnabled ? "● Active (60s Interval)" : "⏸️ Paused"}
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Last Backup Timestamp:</span>
+                                <span className="text-slate-300">{lastBackupTime || 'Initial session'}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-slate-400">Persistence Target:</span>
+                                <span className="text-indigo-400 font-bold">Public Browser Storage + API Sync</span>
+                              </div>
                             </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">SMTP Server Port:</span>
-                              <span className="text-slate-300 font-mono">587 (TLS TLS)</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Direct Mail Dispatcher:</span>
-                              <span className="text-indigo-400 font-bold">Active</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Database Microservice:</span>
-                              <span className="text-slate-300 font-mono">JSON Engine (Atomic)</span>
+                          </div>
+
+                          <div className="bg-[#0a0b10] p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-2">
+                              <span>🛡️ Representative Credentials</span>
+                            </h3>
+                            <div className="p-4 bg-slate-900/40 border border-slate-800 rounded-xl space-y-2 text-xs font-mono">
+                              <p className="text-slate-400">Chief Officer:</p>
+                              <p className="text-white font-bold text-sm">Altayeb Yousif Dafalla</p>
+                              <p className="text-rose-400 mt-2">Shandong Azum Import & Export Co., Ltd</p>
+                              <p className="text-slate-500 text-[10px]">Security Tier: LEVEL 5 ROOT CREDENTIALS</p>
                             </div>
                           </div>
                         </div>
-                        <div className="space-y-4">
-                          <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider font-mono">
-                            🛡️ Representative Credentials
-                          </h3>
-                          <div className="p-4 bg-slate-900/40 border border-slate-800 rounded-xl space-y-2 text-xs font-mono">
-                            <p className="text-slate-400">Chief Officer:</p>
-                            <p className="text-white font-bold text-sm">Altayeb Yousif Dafalla</p>
-                            <p className="text-rose-400 mt-2">Shandong Azum Import & Export Co., Ltd</p>
-                            <p className="text-slate-500 text-[10px]">Security Tier: LEVEL 5 ROOT CREDENTIALS</p>
+
+                        {/* AUTOMATED PERIODIC CATALOG BACKUP & RESTORE CONSOLE */}
+                        <div className="bg-[#0a0b10] p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6">
+                          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                                <RotateCcw className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <h3 className="text-base font-black text-white uppercase tracking-tight font-mono flex items-center gap-2">
+                                  <span>Automated Catalog Backup & Restore Engine</span>
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    isAutoBackupEnabled
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                  }`}>
+                                    {isAutoBackupEnabled ? '● LIVE AUTO-SYNC' : 'PAUSED'}
+                                  </span>
+                                </h3>
+                                <p className="text-xs text-slate-400 font-mono mt-0.5">
+                                  Periodic snapshots automatically saved every 60 seconds to browser storage & server persistence
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  const nextState = !isAutoBackupEnabled;
+                                  setIsAutoBackupEnabled(nextState);
+                                  localStorage.setItem('azum_auto_backup_enabled', String(nextState));
+                                  triggerToast(nextState ? "Periodic Auto-Backup Engine Enabled (60s interval)" : "Periodic Auto-Backup Paused", "info");
+                                }}
+                                className={`px-3 py-2 rounded-xl border text-xs font-bold font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  isAutoBackupEnabled
+                                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                                }`}
+                              >
+                                {isAutoBackupEnabled ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                                <span>{isAutoBackupEnabled ? 'Pause Auto-Backup' : 'Enable Auto-Backup'}</span>
+                              </button>
+
+                              <button
+                                onClick={() => createBackupSnapshot('manual')}
+                                className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-bold text-xs font-mono rounded-xl shadow-lg flex items-center gap-1.5 cursor-pointer transition-all hover:scale-102"
+                              >
+                                <Zap className="w-3.5 h-3.5" />
+                                <span>⚡ Backup Now</span>
+                              </button>
+
+                              <label className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold font-mono cursor-pointer flex items-center gap-1.5 transition-all">
+                                <Upload className="w-3.5 h-3.5 text-indigo-400" />
+                                <span>Upload Backup JSON</span>
+                                <input
+                                  type="file"
+                                  accept=".json"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    const reader = new FileReader();
+                                    reader.onload = async (event) => {
+                                      try {
+                                        const content = event.target?.result as string;
+                                        const parsed = JSON.parse(content);
+                                        let itemsToRestore: Product[] = [];
+                                        if (Array.isArray(parsed)) {
+                                          itemsToRestore = parsed;
+                                        } else if (parsed && Array.isArray(parsed.products)) {
+                                          itemsToRestore = parsed.products;
+                                        }
+                                        if (itemsToRestore.length > 0) {
+                                          const uploadedSnapshot = {
+                                            id: `uploaded-${Date.now()}`,
+                                            timestamp: `File Upload (${file.name})`,
+                                            productCount: itemsToRestore.length,
+                                            products: itemsToRestore,
+                                            type: 'manual' as const
+                                          };
+                                          await restoreCatalogFromBackup(uploadedSnapshot);
+                                        } else {
+                                          triggerToast("Error: No valid product array found in uploaded JSON.", "error");
+                                        }
+                                      } catch (err) {
+                                        triggerToast("Error: Failed to parse JSON file.", "error");
+                                      }
+                                    };
+                                    reader.readAsText(file);
+                                    e.target.value = '';
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Snapshot metrics summary */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono text-xs">
+                            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-1">
+                              <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Active Catalog Products</span>
+                              <div className="text-xl font-extrabold text-white">{products.length} Items</div>
+                              <p className="text-[10px] text-slate-500">Live in current session memory</p>
+                            </div>
+                            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-1">
+                              <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Last Snapshot Time</span>
+                              <div className="text-sm font-extrabold text-emerald-400 truncate">{lastBackupTime || 'None yet'}</div>
+                              <p className="text-[10px] text-slate-500">Saved to public browser storage</p>
+                            </div>
+                            <div className="p-4 bg-slate-900/60 border border-slate-800 rounded-xl space-y-1">
+                              <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Saved Backups Count</span>
+                              <div className="text-xl font-extrabold text-indigo-400">{backupHistory.length} Snapshots</div>
+                              <p className="text-[10px] text-slate-500">Available for 1-click catalog restore</p>
+                            </div>
+                          </div>
+
+                          {/* Saved Backups Table */}
+                          <div className="space-y-3 font-mono text-xs">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <History className="w-4 h-4 text-pink-400" />
+                                <span>Backup Snapshots & Restore Points</span>
+                              </h4>
+                              {backupHistory.length > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setBackupHistory([]);
+                                    localStorage.removeItem('azum_catalog_backups');
+                                    triggerToast("Backup history cleared.", "info");
+                                  }}
+                                  className="text-[10px] text-rose-400 hover:text-rose-300 underline cursor-pointer"
+                                >
+                                  Clear Backup History
+                                </button>
+                              )}
+                            </div>
+
+                            {backupHistory.length === 0 ? (
+                              <div className="p-8 border border-dashed border-slate-800 rounded-2xl text-center space-y-3 bg-slate-900/20">
+                                <p className="text-slate-400">No backup snapshots saved yet.</p>
+                                <button
+                                  onClick={() => createBackupSnapshot('manual')}
+                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs cursor-pointer inline-flex items-center gap-1.5"
+                                >
+                                  <Zap className="w-3.5 h-3.5" />
+                                  <span>Create First Backup Snapshot</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto border border-slate-800 rounded-xl">
+                                <table className="w-full text-left border-collapse text-xs">
+                                  <thead>
+                                    <tr className="bg-slate-900/80 border-b border-slate-800 text-slate-400 text-[10px] uppercase tracking-wider">
+                                      <th className="p-3">Snapshot Timestamp</th>
+                                      <th className="p-3">Type</th>
+                                      <th className="p-3">Saved Products</th>
+                                      <th className="p-3 text-right">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-slate-800/60 bg-slate-950/40">
+                                    {backupHistory.map((backup, idx) => (
+                                      <tr key={backup.id} className="hover:bg-slate-900/50 transition-colors">
+                                        <td className="p-3 font-bold text-slate-200">
+                                          <div className="flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
+                                            <span>{backup.timestamp}</span>
+                                            {idx === 0 && (
+                                              <span className="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded text-[9px]">
+                                                LATEST
+                                              </span>
+                                            )}
+                                          </div>
+                                        </td>
+                                        <td className="p-3">
+                                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                            backup.type === 'auto'
+                                              ? 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                                              : 'bg-purple-500/10 text-purple-400 border border-purple-500/20'
+                                          }`}>
+                                            {backup.type === 'auto' ? 'AUTO-INTERVAL' : 'MANUAL'}
+                                          </span>
+                                        </td>
+                                        <td className="p-3 text-slate-300 font-bold">
+                                          {backup.productCount} Items
+                                        </td>
+                                        <td className="p-3 text-right">
+                                          <div className="flex items-center justify-end gap-2">
+                                            <button
+                                              onClick={() => restoreCatalogFromBackup(backup)}
+                                              className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white font-bold rounded-lg text-[11px] shadow transition-all cursor-pointer flex items-center gap-1 hover:scale-105"
+                                              title="Restore product catalog to this snapshot"
+                                            >
+                                              <RotateCcw className="w-3 h-3" />
+                                              <span>Restore</span>
+                                            </button>
+
+                                            <button
+                                              onClick={() => {
+                                                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
+                                                const anchor = document.createElement('a');
+                                                anchor.setAttribute("href", dataStr);
+                                                anchor.setAttribute("download", `azum_backup_${backup.id}.json`);
+                                                anchor.click();
+                                              }}
+                                              className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 rounded-lg cursor-pointer transition-colors"
+                                              title="Download backup file"
+                                            >
+                                              <Download className="w-3.5 h-3.5 text-cyan-400" />
+                                            </button>
+
+                                            <button
+                                              onClick={() => {
+                                                setBackupHistory(prev => {
+                                                  const updated = prev.filter(b => b.id !== backup.id);
+                                                  localStorage.setItem('azum_catalog_backups', JSON.stringify(updated));
+                                                  return updated;
+                                                });
+                                                triggerToast("Snapshot deleted.", "info");
+                                              }}
+                                              className="p-1.5 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-rose-400 border border-slate-800 rounded-lg cursor-pointer transition-colors"
+                                              title="Delete this snapshot"
+                                            >
+                                              <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

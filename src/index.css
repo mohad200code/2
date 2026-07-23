@@ -100,6 +100,29 @@ html {
   animation: toast-progress 4s linear forwards;
 }
 
+/* Stock Inventory Change Animations */
+@keyframes stock-increase-pop {
+  0% { transform: scale(1); box-shadow: 0 0 0px rgba(16, 185, 129, 0); }
+  25% { transform: scale(1.25); box-shadow: 0 0 22px rgba(16, 185, 129, 0.9); }
+  60% { transform: scale(1.08); box-shadow: 0 0 12px rgba(16, 185, 129, 0.6); }
+  100% { transform: scale(1); box-shadow: 0 0 0px rgba(16, 185, 129, 0); }
+}
+
+@keyframes stock-decrease-pop {
+  0% { transform: scale(1); box-shadow: 0 0 0px rgba(244, 63, 94, 0); }
+  25% { transform: scale(0.82); box-shadow: 0 0 22px rgba(244, 63, 94, 0.9); }
+  60% { transform: scale(0.94); box-shadow: 0 0 12px rgba(244, 63, 94, 0.6); }
+  100% { transform: scale(1); box-shadow: 0 0 0px rgba(244, 63, 94, 0); }
+}
+
+.animate-stock-increase {
+  animation: stock-increase-pop 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.animate-stock-decrease {
+  animation: stock-decrease-pop 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
 /* Elegant, solid pure black text for maximum readability in Day Mode */
 
 /* Specific interactive scale-up hover animation for all cards */
