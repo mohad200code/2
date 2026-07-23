@@ -3,11 +3,11 @@ const path = require('path');
 
 const generatedProducts = JSON.parse(fs.readFileSync(path.join(__dirname, 'products_gen.json'), 'utf-8'));
 
-const imageFiles = fs.readdirSync(path.join(__dirname, '..', 'src', 'assets', 'products-image'))
+const imageFiles = fs.readdirSync(path.join(__dirname, '..', 'src', 'products-image'))
   .filter(f => /\.(png|jpg|jpeg|webp|svg)$/i.test(f))
   .sort();
 
-console.log(`Found ${imageFiles.length} images in src/assets/products-image`);
+console.log(`Found ${imageFiles.length} images in src/products-image`);
 
 let importLines = [];
 let imgVarNames = [];
@@ -164,7 +164,7 @@ const plainProducts = generatedProducts.map((p, idx) => {
   const filename = imageFiles[idx % imageFiles.length];
   return {
     ...p,
-    image: `/src/assets/products-image/${filename}`
+    image: `/src/products-image/${filename}`
   };
 });
 

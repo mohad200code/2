@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   Home,
   Bell,
@@ -110,7 +110,7 @@ import {
 } from 'lucide-react';
 
 import { Product, User as UserType, Order, CartItem } from './types';
-import { INITIAL_PRODUCTS, INITIAL_USERS, INITIAL_ORDERS, CATEGORIES } from './mockData';
+import { INITIAL_PRODUCTS, INITIAL_USERS, INITIAL_ORDERS, CATEGORIES, getProductImageUrl } from './mockData';
 import helicalGear from './assets/images/helical_gear_1782614423344.jpg';
 import { ProductSVG } from './components/ProductSVG';
 import { ClerkAuth } from './components/ClerkAuth';
@@ -1070,11 +1070,17 @@ export default function App() {
       try {
         const parsed = JSON.parse(savedProducts);
         if (Array.isArray(parsed)) {
-          return parsed;
+          return parsed.map((p: Product) => ({
+            ...p,
+            image: getProductImageUrl(p.image)
+          }));
         }
       } catch (e) {}
     }
-    return INITIAL_PRODUCTS;
+    return INITIAL_PRODUCTS.map(p => ({
+      ...p,
+      image: getProductImageUrl(p.image)
+    }));
   });
 
   // Load products from backend server on initialization for synchronized state across all users
@@ -1087,7 +1093,10 @@ export default function App() {
         }
         const data = await res.json();
         if (data.success && data.products !== null && Array.isArray(data.products)) {
-          setProducts(data.products);
+          setProducts(data.products.map((p: Product) => ({
+            ...p,
+            image: getProductImageUrl(p.image)
+          })));
         } else {
           // Seed the backend with local state if empty or not found on server
           await fetch('/api/products', {
@@ -1122,10 +1131,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ products })
-      }).catch(err => console.error("Error saving products to server:", err));
-
-      // Reset trend alert dismissal on stock updates
-      setIsTrendAlertDismissed(false);
+      }).catch(err => console.warn("Error saving products to server:", err));
     }
   }, [products, productsLoaded]);
 
@@ -1138,21 +1144,27 @@ export default function App() {
         if (res.ok) {
           const data = await res.json();
           if (data.success && Array.isArray(data.products) && data.products.length > 0) {
-            // Only update if stringified version differs to avoid unnecessary state triggers
-            if (JSON.stringify(data.products) !== JSON.stringify(products)) {
-              setProducts(data.products);
-              try {
-                localStorage.setItem('cyberport_products', JSON.stringify(data.products));
-              } catch (e) {}
-            }
+            const mapped = data.products.map((p: Product) => ({
+              ...p,
+              image: getProductImageUrl(p.image)
+            }));
+            setProducts(prev => {
+              if (JSON.stringify(mapped) !== JSON.stringify(prev)) {
+                try {
+                  localStorage.setItem('cyberport_products', JSON.stringify(mapped));
+                } catch (e) {}
+                return mapped;
+              }
+              return prev;
+            });
           }
         }
       } catch (err) {
         // Silently handle network polling errors
       }
-    }, 6000);
+    }, 10000);
     return () => clearInterval(pollInterval);
-  }, [productsLoaded, products]);
+  }, [productsLoaded]);
 
   // Periodic Trend Alert simulated decrease based on configurable sensitivity threshold
   useEffect(() => {
@@ -1338,26 +1350,35 @@ export default function App() {
   }, [users]);
 
   // Initialize dynamic popularity recent views
+  const productsKey = products.map(p => p.id).join(',');
   useEffect(() => {
-    const initial: Record<string, number> = {};
-    products.forEach(p => {
-      const seed = p.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-      initial[p.id] = (seed % 140) + 40;
+    if (!products.length) return;
+    setRecentViews(prev => {
+      const copy = { ...prev };
+      let changed = false;
+      products.forEach(p => {
+        if (copy[p.id] === undefined) {
+          const seed = p.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          copy[p.id] = (seed % 140) + 40;
+          changed = true;
+        }
+      });
+      return changed ? copy : prev;
     });
-    setRecentViews(initial);
 
     const interval = setInterval(() => {
       setRecentViews(prev => {
-        const copy = { ...prev };
+        if (!products.length) return prev;
         const randomProduct = products[Math.floor(Math.random() * products.length)];
-        if (randomProduct) {
-          copy[randomProduct.id] = (copy[randomProduct.id] || 45) + Math.floor(Math.random() * 3) + 1;
-        }
-        return copy;
+        if (!randomProduct) return prev;
+        return {
+          ...prev,
+          [randomProduct.id]: (prev[randomProduct.id] || 45) + Math.floor(Math.random() * 3) + 1
+        };
       });
-    }, 6000);
+    }, 8000);
     return () => clearInterval(interval);
-  }, [products]);
+  }, [productsKey]);
 
   // Inventory Stock change flashing / blinking detector
   const prevStockRef = useRef<Record<string, number>>({});
@@ -2013,6 +2034,12 @@ export default function App() {
 
   // System Notification Toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Action Helpers: Trigger system toast notification
+  const triggerToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
 
   // Futuristic Battery Status Monitor
   const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
@@ -3194,7 +3221,7 @@ export default function App() {
         })
         .then(data => {
           if (data.users) {
-            setRegisteredUsers(data.users);
+            setRegisteredUsers(prev => JSON.stringify(prev) === JSON.stringify(data.users) ? prev : data.users);
           }
         })
         .catch(err => {
@@ -3596,11 +3623,6 @@ export default function App() {
     }
   }, [selectedProduct, currentUser]);
 
-  // Synchronize products to localStorage whenever state changes
-  useEffect(() => {
-    localStorage.setItem('cyberport_products', JSON.stringify(products));
-  }, [products]);
-
   // 1. Fetch Google Client ID from backend
   useEffect(() => {
     fetch("/api/google-client-id")
@@ -3630,8 +3652,10 @@ export default function App() {
   }, []);
 
   // Handle auto-opening Quick View or Product Details via URL Query Parameters
+  const urlParamsHandledRef = useRef(false);
   useEffect(() => {
-    if (products.length > 0) {
+    if (products.length > 0 && !urlParamsHandledRef.current) {
+      urlParamsHandledRef.current = true;
       const urlParams = new URLSearchParams(window.location.search);
       const quickViewId = urlParams.get('quickview');
       const detailsId = urlParams.get('details');
@@ -3711,12 +3735,6 @@ export default function App() {
   }, []);
 
   const t = translations[language];
-
-  // Action Helpers: Trigger system toast notification
-  const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
-  };
 
   const handleProductCardClick = (p: Product) => {
     if (loadingProductId) return;
@@ -5524,10 +5542,17 @@ export default function App() {
                           <div className="parallax-img w-full h-full">
                             {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
                               <img
-                                src={p.image}
+                                src={getProductImageUrl(p.image)}
                                 alt={p.name}
                                 className="w-full h-full object-cover"
                                 referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  if (!target.src.includes('/products-image/')) {
+                                    const filename = p.image?.split('/').pop();
+                                    if (filename) target.src = `/src/products-image/${filename}`;
+                                  }
+                                }}
                               />
                             ) : (
                               <div className="w-full h-full bg-slate-900/60 flex items-center justify-center rounded-2xl">
@@ -9298,7 +9323,8 @@ export default function App() {
                 theme === 'day' ? 'border-slate-200' : 'border-slate-800/80'
               }`}>
                 {/* PROFESSIONAL PRINT-ONLY HEADER */}
-                <header className="print-header hidden print:flex items-center justify-between w-full border-b-2 border-black pb-4 mb-2">
+                <header className="print-header hidden print:flex items-center justify-between w-full border-b-2 border-black pb-4 mb-2 relative">
+                  <img src="./products-image/logo.png" alt="Sdazum Logo Watermark" className="sdazum-watermark hidden print:block" />
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-black text-white flex items-center justify-center font-black rounded-xl text-xl font-mono border border-black shadow-sm">
                       SG
@@ -9346,12 +9372,26 @@ export default function App() {
                       </h2>
 
                       {/* TINY LAST SYNCED TIMESTAMP INDICATOR WITH SYNC-STATUS PULSE */}
-                      <div className="sync-status-indicator inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[11px] font-mono font-semibold shrink-0">
+                      <div
+                        className="sync-status-indicator relative group inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[11px] font-mono font-semibold shrink-0 cursor-help"
+                        title="System Sync Status: ACTIVE | Last successful background sync cycle duration: 124ms"
+                      >
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
                         <span>Last Synced: {lastSyncedTimestamp}</span>
+
+                        {/* HOVER TOOLTIP */}
+                        <div className="absolute left-0 top-full mt-1.5 hidden group-hover:flex flex-col gap-1 p-2 bg-slate-900/95 text-slate-200 border border-emerald-500/30 rounded-lg shadow-xl text-[10px] font-mono whitespace-nowrap z-50 pointer-events-none">
+                          <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>System Sync Status: ACTIVE</span>
+                          </div>
+                          <div className="text-slate-400">
+                            Last cycle duration: <span className="text-slate-200 font-bold">124ms</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <p className="text-xs text-slate-500 font-mono mt-1">

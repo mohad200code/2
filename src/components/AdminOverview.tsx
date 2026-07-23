@@ -53,6 +53,7 @@ import {
   Cell,
 } from 'recharts';
 import { Product, Order } from '../types';
+import { getProductImageUrl } from '../mockData';
 import logoImg from '../assets/images/shandong_azum_logo.jpg';
 import { db } from '../lib/firebase';
 import { doc, setDoc, deleteDoc } from 'firebase/firestore';
@@ -2387,7 +2388,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ products, orders, 
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-slate-100 dark:bg-slate-900 rounded-lg flex items-center justify-center shrink-0 overflow-hidden border border-slate-200 dark:border-slate-800 p-0.5">
                         {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
-                          <img src={p.image} alt={p.name} className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
+                          <img src={getProductImageUrl(p.image)} alt={p.name} className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
                         ) : (
                           <ProductSVG type={p.image} color={p.colors?.[0]?.value || '#94A3B8'} className="w-6 h-6" />
                         )}
@@ -2440,7 +2441,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ products, orders, 
                 <span className="text-xs font-bold text-slate-400 dark:text-slate-500 w-4">#{index + 1}</span>
                 <div className="w-10 h-10 bg-slate-50 dark:bg-slate-900 rounded-lg flex items-center justify-center shrink-0 overflow-hidden border border-slate-200 dark:border-slate-750 p-0.5">
                   {p.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(p.image) ? (
-                    <img src={p.image} alt={p.name} className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
+                    <img src={getProductImageUrl(p.image)} alt={p.name} className="w-full h-full object-cover rounded" referrerPolicy="no-referrer" />
                   ) : (
                     <ProductSVG type={p.image} color={p.colors?.[0]?.value || '#94A3B8'} className="w-6 h-6" />
                   )}

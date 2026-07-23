@@ -178,6 +178,37 @@ export const ALL_UPLOADED_IMAGES = Object.entries(imagesGlob).map(([key, value])
   };
 });
 
+export function getProductImageUrl(imagePath?: string): string {
+  if (!imagePath) return '';
+  if (
+    imagePath.startsWith('http://') ||
+    imagePath.startsWith('https://') ||
+    imagePath.startsWith('data:') ||
+    imagePath.startsWith('blob:') ||
+    imagePath.startsWith('/assets/')
+  ) {
+    return imagePath;
+  }
+
+  const cleanPath = imagePath.split('?')[0].split('#')[0];
+  const filename = cleanPath.substring(cleanPath.lastIndexOf('/') + 1);
+
+  if (filename) {
+    const globKey = `./products-image/${filename}`;
+    if (imagesGlob[globKey]) {
+      return imagesGlob[globKey] as string;
+    }
+    const found = ALL_UPLOADED_IMAGES.find(
+      img => img.name === filename || img.name === filename.replace(/\.[^/.]+$/, "")
+    );
+    if (found && found.url) {
+      return found.url;
+    }
+  }
+
+  return imagePath;
+}
+
 export const ALL_161_IMAGES = [
   img_item_0_ABUIABACGAAg_OuSngYolMOAWTBuOJEB_jpg,
   img_item_1_ABUIABACGAAg0JmJnwYoqPPsggQw9AM49AM_1_jpg,

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getProductImageUrl } from '../mockData';
 
 interface LazyImageProps {
   src: string;
@@ -17,7 +18,10 @@ export const LazyImage: React.FC<LazyImageProps> = ({
 }) => {
   const [isIntersected, setIsIntersected] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const resolvedSrc = getProductImageUrl(src);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.IntersectionObserver) {
@@ -85,9 +89,20 @@ export const LazyImage: React.FC<LazyImageProps> = ({
       {/* Actual Image */}
       {isIntersected && (
         <img
-          src={src}
+          src={resolvedSrc}
           alt={alt}
           onLoad={() => setIsLoaded(true)}
+          onError={(e) => {
+            setHasError(true);
+            // Fallback to static served path or placeholder if image fails
+            const target = e.currentTarget;
+            if (!target.src.includes('/products-image/')) {
+              const filename = resolvedSrc.split('/').pop();
+              if (filename) {
+                target.src = `/src/products-image/${filename}`;
+              }
+            }
+          }}
           className={`${className} transition-all duration-700 ease-out ${
             isLoaded ? 'opacity-100 scale-100 blur-0' : 'opacity-0 scale-95 blur-md'
           }`}

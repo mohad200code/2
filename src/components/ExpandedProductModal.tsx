@@ -6,6 +6,7 @@ import {
   LineChart
 } from 'lucide-react';
 import { Product } from '../types';
+import { getProductImageUrl } from '../mockData';
 import { ProductSVG } from './ProductSVG';
 import { PriceSparkline } from './PriceSparkline';
 
@@ -440,7 +441,7 @@ export const ExpandedProductModal: React.FC<ExpandedProductModalProps> = ({
             <div className="w-full h-full max-h-72 flex items-center justify-center">
               {product.image && !['tshirt', 'shoe', 'hoodie', 'shirt', 'cap', 'mug', 'cup', 'sticker', 'tote', 'keychain', 'poster', 'backpack'].includes(product.image) ? (
                 <img
-                  src={product.image}
+                  src={getProductImageUrl(product.image)}
                   alt={product.name}
                   className="w-full h-full object-cover rounded-xl"
                   referrerPolicy="no-referrer"

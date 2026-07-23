@@ -2057,6 +2057,14 @@ async function startServer() {
     }
   });
 
+  // Serve static product image directories
+  const productsImageDir = path.join(process.cwd(), "src", "products-image");
+  if (fs.existsSync(productsImageDir)) {
+    app.use("/src/products-image", express.static(productsImageDir));
+    app.use("/src/assets/products-image", express.static(productsImageDir));
+    app.use("/products-image", express.static(productsImageDir));
+  }
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
