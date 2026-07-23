@@ -4407,7 +4407,7 @@ export default function App() {
     const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 
     const rowsHtml = filteredProducts.map((p, idx) => `
-      <tr style="border-bottom: 1px solid #e2e8f0;">
+      <tr style="border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid; page-break-after: auto; break-after: auto; margin-top: 2px; margin-bottom: 2px;">
         <td style="padding: 10px; font-weight: bold; color: #475569; text-align: center;">${idx + 1}</td>
         <td style="padding: 10px; text-align: center;">
           ${p.image ? `<img src="${p.image}" alt="${p.name}" style="width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid #cbd5e1;" />` : '<div style="width:48px;height:48px;background:#f1f5f9;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#94a3b8;">No Img</div>'}
@@ -4435,9 +4435,14 @@ export default function App() {
         <head>
           <title>Azum Cyberport - Printable Product Catalog Summary</title>
           <style>
+            @page {
+              size: A4 landscape;
+              margin: 15mm 10mm 15mm 10mm;
+            }
             @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 0; }
               .no-print { display: none !important; }
+              tr { page-break-inside: avoid !important; break-inside: avoid !important; page-break-after: auto !important; break-after: auto !important; margin-top: 2px !important; margin-bottom: 2px !important; }
             }
             body {
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -4445,6 +4450,14 @@ export default function App() {
               margin: 0;
               padding: 24px;
               background: #ffffff;
+            }
+            tr {
+              page-break-inside: avoid;
+              break-inside: avoid;
+              page-break-after: auto;
+              break-after: auto;
+              margin-top: 2px;
+              margin-bottom: 2px;
             }
             .header {
               display: flex;
@@ -6453,6 +6466,65 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Secondary Filter Bar below Print Catalog controls */}
+              <div 
+                className={`flex flex-wrap items-center justify-between gap-3 p-3 px-4 rounded-2xl border transition-all ${
+                  theme === 'day'
+                    ? 'bg-slate-50/80 border-slate-200/80 shadow-xs'
+                    : theme === 'cyberpunk'
+                      ? 'bg-slate-950/80 border-pink-500/20 shadow-[0_0_15px_rgba(236,72,153,0.1)]'
+                      : 'bg-slate-900/40 border-slate-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                    theme === 'day' ? 'text-slate-500' : 'text-slate-400'
+                  }`}>
+                    <Filter className="w-3.5 h-3.5 text-pink-400" />
+                    <span>Quick Filters:</span>
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { id: 'all', label: 'All Products', icon: '🌐', count: products.length },
+                    { id: 'low-stock', label: 'Low Stock', icon: '⚠️', count: products.filter(p => (p.stock !== undefined ? p.stock : 0) < 15).length },
+                    { id: 'high-demand', label: 'High Demand', icon: '🔥', count: products.filter(p => (p.salesCount !== undefined && p.salesCount >= 15) || (p.rating !== undefined && p.rating >= 4.8)).length },
+                    { id: 'new-arrivals', label: 'New', icon: '✨', count: products.filter(p => p.isNew || p.id === '1' || p.id === '3' || p.id === '5' || (p.stock !== undefined && p.stock % 3 === 0)).length }
+                  ].map((pill) => {
+                    const isSelected = catalogTagFilter === pill.id;
+                    return (
+                      <button
+                        key={pill.id}
+                        onClick={() => {
+                          setCatalogTagFilter(pill.id as any);
+                          triggerToast(`Catalog filter updated: ${pill.label}`, "success");
+                        }}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-sans transition-all duration-300 cursor-pointer flex items-center gap-2 border ${
+                          isSelected
+                            ? theme === 'cyberpunk'
+                              ? 'bg-gradient-to-r from-pink-500 to-purple-600 border-pink-400 text-white shadow-[0_0_12px_#ec4899] scale-105 ring-2 ring-pink-500/40'
+                              : 'bg-indigo-600 border-indigo-500 text-white dark:bg-slate-100 dark:border-slate-100 dark:text-slate-950 scale-105 ring-2 ring-indigo-500/30'
+                            : theme === 'day'
+                              ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300'
+                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <span>{pill.icon}</span>
+                        <span>{pill.label}</span>
+                        <span className={`px-2 py-0.2 rounded-full text-[10px] font-mono font-black ${
+                          isSelected
+                            ? 'bg-white/20 text-white dark:bg-slate-900/30 dark:text-slate-900'
+                            : 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                        }`}>
+                          {pill.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Recent Scans list below the scanner area / Scan QR trigger */}
               {recentScans.length > 0 && (
                 <div className={`p-3 rounded-2xl border font-mono text-[11px] flex flex-wrap items-center gap-3 ${
@@ -6991,18 +7063,30 @@ export default function App() {
                                 const stockInfo = stockChangeMap[p.id];
                                 const isAnimating = stockInfo && (Date.now() - stockInfo.timestamp < 2500);
                                 const isIncrease = stockInfo?.type === 'increase';
+                                const currentStockVal = p.stock !== undefined ? p.stock : 0;
+                                const isCriticalStock = currentStockVal < 5;
 
                                 return (
-                                  <span className={`px-2 py-0.5 border rounded text-[9px] font-bold font-mono transition-all duration-300 flex items-center gap-1 ${
-                                    isAnimating
-                                      ? isIncrease
-                                        ? 'animate-stock-increase bg-emerald-500/25 text-emerald-300 border-emerald-400 font-black shadow-[0_0_16px_rgba(16,185,129,0.7)]'
-                                        : 'animate-stock-decrease bg-rose-500/25 text-rose-300 border-rose-400 font-black shadow-[0_0_16px_rgba(244,63,94,0.7)]'
-                                      : (p.stock !== undefined && p.stock < 15)
-                                        ? theme === 'day' ? 'bg-rose-50 text-rose-700 border-rose-200 font-bold' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                                        : theme === 'day' ? 'bg-slate-100 text-slate-800 border-slate-300 font-extrabold' : 'bg-slate-900/60 text-slate-300 border-slate-800'
-                                  }`}>
+                                  <span 
+                                    data-critical-stock={isCriticalStock ? "true" : "false"}
+                                    className={`px-2 py-0.5 border rounded text-[9px] font-bold font-mono transition-all duration-300 flex items-center gap-1 ${
+                                      isCriticalStock
+                                        ? 'animate-stock-shake bg-rose-500/20 text-rose-500 border-rose-500/50 font-black shadow-[0_0_12px_rgba(244,63,94,0.4)]'
+                                        : isAnimating
+                                          ? isIncrease
+                                            ? 'animate-stock-increase bg-emerald-500/25 text-emerald-300 border-emerald-400 font-black shadow-[0_0_16px_rgba(16,185,129,0.7)]'
+                                            : 'animate-stock-decrease bg-rose-500/25 text-rose-300 border-rose-400 font-black shadow-[0_0_16px_rgba(244,63,94,0.7)]'
+                                          : (p.stock !== undefined && p.stock < 15)
+                                            ? theme === 'day' ? 'bg-rose-50 text-rose-700 border-rose-200 font-bold' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                            : theme === 'day' ? 'bg-slate-100 text-slate-800 border-slate-300 font-extrabold' : 'bg-slate-900/60 text-slate-300 border-slate-800'
+                                    }`}
+                                  >
                                     📦 {p.stock !== undefined ? `${p.stock} units` : '0 units'}
+                                    {isCriticalStock && (
+                                      <span className="ml-0.5 px-1 py-0.2 rounded text-[8px] font-black uppercase tracking-wider bg-rose-600 text-white animate-pulse">
+                                        Urgent
+                                      </span>
+                                    )}
                                     {isAnimating && (
                                       <span className={`ml-0.5 px-1 py-0.2 rounded text-[8px] font-black uppercase tracking-wider ${
                                         isIncrease ? 'bg-emerald-500 text-slate-950 animate-bounce' : 'bg-rose-500 text-white animate-pulse'

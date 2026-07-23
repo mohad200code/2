@@ -123,6 +123,28 @@ html {
   animation: stock-decrease-pop 1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
+/* Subtle shake animation & text color transition for product card stock displays < 5 units in #products-grid-catalog */
+@keyframes stock-shake-subtle {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-2.5px) rotate(-1deg); }
+  30% { transform: translateX(2.5px) rotate(1deg); }
+  45% { transform: translateX(-2px) rotate(-0.5deg); }
+  60% { transform: translateX(2px) rotate(0.5deg); }
+  75% { transform: translateX(-1px); }
+}
+
+@keyframes stock-urgency-color-transition {
+  0%, 100% { color: #f43f5e; border-color: rgba(244, 63, 94, 0.6); }
+  50% { color: #e11d48; border-color: rgba(225, 29, 72, 0.9); }
+}
+
+#products-grid-catalog .animate-stock-shake,
+#products-grid-catalog [data-critical-stock="true"] {
+  animation: stock-shake-subtle 2.2s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite,
+             stock-urgency-color-transition 1.5s ease-in-out infinite !important;
+  transition: color 0.5s ease-in-out, background-color 0.5s ease-in-out, border-color 0.5s ease-in-out;
+}
+
 /* Elegant, solid pure black text for maximum readability in Day Mode */
 
 /* Specific interactive scale-up hover animation for all cards */
@@ -856,13 +878,13 @@ html, body, *:not(.cyber-scroll) {
 /* 7. Printer-friendly CSS layout view for admin data inspection */
 @page {
   size: A4 landscape;
-  margin: 12mm 10mm 12mm 10mm;
+  margin: 26mm 10mm 14mm 10mm;
 }
 
 @media print {
   @page {
     size: A4 landscape;
-    margin: 18mm 10mm 12mm 10mm;
+    margin: 26mm 10mm 14mm 10mm;
   }
 
   * {
@@ -934,7 +956,7 @@ html, body, *:not(.cyber-scroll) {
     color: #222222 !important;
   }
 
-  /* Persistent company header using CSS fixed positioning */
+  /* Persistent company header using CSS fixed positioning aligned at top of every page */
   #admin-subheader .print-header,
   .print-header {
     display: flex !important;
@@ -943,16 +965,46 @@ html, body, *:not(.cyber-scroll) {
     left: 0 !important;
     right: 0 !important;
     width: 100% !important;
+    height: 20mm !important;
     background: #ffffff !important;
     color: #000000 !important;
     font-weight: 800 !important;
     border-bottom: 3px double #000000 !important;
-    padding-bottom: 6px !important;
-    margin-bottom: 12px !important;
+    padding: 2mm 4mm 4mm 4mm !important;
+    margin: 0 !important;
     z-index: 99999 !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
   }
 
-  /* Inject Sdazum Global logo in .print-header class at top-left corner using CSS content property */
+  /* Logo watermark positioning within .print-header aligning perfectly without overlapping table content */
+  .print-header .sdazum-watermark,
+  .sdazum-watermark {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    height: 16mm !important;
+    max-height: 100% !important;
+    width: auto !important;
+    opacity: 0.12 !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+    object-fit: contain !important;
+  }
+
+  .print-header .company-details,
+  .print-header > div {
+    position: relative !important;
+    z-index: 2 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+  }
+
+  /* Inject Sdazum Global badge in .print-header class at top-left corner using CSS content property */
   #admin-subheader .print-header::before,
   .print-header::before {
     content: "SDAZUM GLOBAL" !important;
@@ -1002,21 +1054,29 @@ html, body, *:not(.cyber-scroll) {
     background-color: #f7f7f7 !important;
   }
 
-  /* Automatic column width adjustments and table constraints for A4 landscape mode */
+  /* Apply CSS grid-template-columns to the admin table within the #admin-subheader context to enforce stricter width constraints, preventing overflow on smaller printer margins */
   #admin-subheader table,
   #admin-subheader ~ * table,
-  #admin-panel-layout table,
-  main table,
-  table {
+  #admin-subheader .admin-table,
+  .admin-table {
+    display: grid !important;
+    grid-template-columns: minmax(40px, 0.6fr) minmax(80px, 1.2fr) minmax(140px, 2.5fr) minmax(100px, 1.5fr) minmax(70px, 1fr) minmax(80px, 1.2fr) !important;
     width: 100% !important;
     max-width: 100% !important;
-    table-layout: fixed !important;
-    border-collapse: collapse !important;
-    page-break-inside: auto !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
     margin-top: 10px !important;
     margin-bottom: 14px !important;
-    overflow: visible !important;
-    background: #ffffff !important;
+    border-collapse: collapse !important;
+  }
+
+  #admin-subheader table thead,
+  #admin-subheader table tbody,
+  #admin-subheader table tr,
+  #admin-subheader ~ * table thead,
+  #admin-subheader ~ * table tbody,
+  #admin-subheader ~ * table tr {
+    display: contents !important;
   }
 
   #admin-subheader table th,
@@ -1038,6 +1098,7 @@ html, body, *:not(.cyber-scroll) {
     white-space: normal !important;
     overflow-wrap: break-word !important;
     max-width: none !important;
+    box-sizing: border-box !important;
   }
 
   table th {
@@ -1050,30 +1111,19 @@ html, body, *:not(.cyber-scroll) {
     border-bottom: 2px solid #000000 !important;
   }
 
-  /* Specific column width percentage constraints for A4 landscape fill without horizontal scrolling */
-  table th:first-child,
-  table td:first-child {
-    width: 10% !important;
-  }
-
-  table th:nth-child(2),
-  table td:nth-child(2) {
-    width: 25% !important;
-  }
-
-  table th:nth-child(3),
-  table td:nth-child(3) {
-    width: 18% !important;
-  }
-
-  table th:nth-child(4),
-  table td:nth-child(4) {
-    width: 15% !important;
-  }
-
-  tr {
+  /* Table row margin and page-break-after properties to prevent data from being cut in half across pages */
+  tr,
+  #admin-subheader tr,
+  #admin-subheader ~ * tr,
+  #admin-panel-layout tr,
+  main tr,
+  table tr {
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
     page-break-after: auto !important;
+    break-after: auto !important;
+    margin-top: 2px !important;
+    margin-bottom: 2px !important;
   }
 
   .overflow-x-auto,
