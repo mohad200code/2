@@ -96,6 +96,7 @@ import {
   Tag,
   CheckSquare,
   Maximize,
+  Maximize2,
   Copy,
   Filter,
   BookOpen,
@@ -107,7 +108,9 @@ import {
   Menu,
   Grid,
   HardDrive,
-  Square
+  Square,
+  Edit3,
+  Activity
 } from 'lucide-react';
 
 import { Product, User as UserType, Order, CartItem } from './types';
@@ -1571,6 +1574,58 @@ export default function App() {
     return localStorage.getItem('azum_stock_email') || 'mohabmohnad9@gmail.com';
   });
   const [editingThresholdVal, setEditingThresholdVal] = useState<number>(5);
+  const [showCatalogTopBtn, setShowCatalogTopBtn] = useState<boolean>(false);
+  const [catalogCardZoom, setCatalogCardZoom] = useState<number>(1.0);
+  const [showLowStockWarnings, setShowLowStockWarnings] = useState<boolean>(true);
+
+  // Batch Edit Mode & Inventory Trends States
+  const [isBatchEditActive, setIsBatchEditActive] = useState<boolean>(false);
+  const [batchEditSelectedIds, setBatchEditSelectedIds] = useState<string[]>([]);
+  const [batchCategoryInput, setBatchCategoryInput] = useState<string>('');
+  const [batchTagInput, setBatchTagInput] = useState<string>('');
+  const [batchPriceInput, setBatchPriceInput] = useState<string>('');
+  const [showInventoryTrends, setShowInventoryTrends] = useState<boolean>(false);
+
+  // Deterministic 30-day stock level history generator for Inventory Trends sparklines
+  const get30DayStockHistory = (id: string, currentStock: number) => {
+    const seed = id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const data = [];
+    let val = Math.max(2, currentStock + (seed % 10) - 5);
+    for (let i = 30; i >= 1; i--) {
+      if (i === 1) {
+        val = currentStock;
+      } else {
+        const delta = Math.sin(i * 0.5 + seed) * 4 + ((i % 3 === 0) ? 5 : -2);
+        val = Math.max(1, Math.min(100, Math.round(val + delta)));
+      }
+      data.push({ day: `Day ${31 - i}`, stock: val });
+    }
+    return data;
+  };
+
+  // Monitor scroll position to toggle Catalog Return-to-Top Floating Action Button
+  useEffect(() => {
+    const handleCatalogScroll = () => {
+      const catalogEl = document.getElementById('products-grid-catalog');
+      if (catalogEl) {
+        const rect = catalogEl.getBoundingClientRect();
+        // Visible when scrolled past the top row of products
+        if (rect.top < -180 || window.scrollY > 600) {
+          setShowCatalogTopBtn(true);
+        } else {
+          setShowCatalogTopBtn(false);
+        }
+      } else if (window.scrollY > 600) {
+        setShowCatalogTopBtn(true);
+      } else {
+        setShowCatalogTopBtn(false);
+      }
+    };
+
+    window.addEventListener('scroll', handleCatalogScroll, { passive: true });
+    handleCatalogScroll();
+    return () => window.removeEventListener('scroll', handleCatalogScroll);
+  }, []);
 
   // New States for Price Alerts
   const [priceAlertProduct, setPriceAlertProduct] = useState<Product | null>(null);
@@ -6427,6 +6482,76 @@ export default function App() {
                     <span>{bulkTagMode ? 'Cancel Bulk Tag' : 'Bulk Tag'}</span>
                   </button>
 
+                  {/* Batch Edit Mode Toggle Button */}
+                  <button
+                    onClick={() => {
+                      setIsBatchEditActive(prev => !prev);
+                      setBatchEditSelectedIds([]);
+                      triggerToast(
+                        !isBatchEditActive ? "Batch Edit Mode Enabled: select product checkboxes to edit category or price" : "Batch Edit Mode Disabled",
+                        "info"
+                      );
+                    }}
+                    className={`px-3 py-2 text-xs font-bold font-sans uppercase rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      isBatchEditActive
+                        ? 'bg-gradient-to-r from-pink-500 to-purple-600 border-pink-400 text-white shadow-[0_0_15px_#ec4899] ring-2 ring-pink-500/40 scale-105'
+                        : theme === 'day'
+                          ? 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-xs'
+                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 shadow-xs'
+                    }`}
+                    title="Toggle Batch Edit Mode to update category or price tags for multiple items simultaneously"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-pink-400" />
+                    <span>{isBatchEditActive ? 'Cancel Batch Edit' : 'Batch Edit'}</span>
+                  </button>
+
+                  {/* Inventory Trends Sparklines Toggle Button */}
+                  <button
+                    onClick={() => {
+                      setShowInventoryTrends(prev => !prev);
+                      triggerToast(
+                        !showInventoryTrends ? "30-Day Inventory Trends Sparklines Enabled" : "30-Day Inventory Trends Sparklines Disabled",
+                        "info"
+                      );
+                    }}
+                    className={`px-3 py-2 text-xs font-bold font-sans uppercase rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      showInventoryTrends
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.4)] ring-2 ring-cyan-400/30 scale-105'
+                        : theme === 'day'
+                          ? 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50 shadow-xs'
+                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 shadow-xs'
+                    }`}
+                    title="Toggle 30-day stock level sparkline charts inside visible product cards"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                    <span>{showInventoryTrends ? 'Hide Trends' : 'Inventory Trends'}</span>
+                  </button>
+
+                  {/* Dedicated Cyberpunk Grid View Theme Toggle */}
+                  <button
+                    onClick={() => {
+                      const nextTheme = theme === 'cyberpunk' ? 'cyberpunk-light' : 'cyberpunk';
+                      setTheme(nextTheme);
+                      triggerToast(
+                        nextTheme === 'cyberpunk-light'
+                          ? "Switched Catalog view to Cyberpunk Light Mode ⚡"
+                          : "Switched Catalog view to Cyberpunk Dark Mode ⚡",
+                        "info"
+                      );
+                    }}
+                    className={`px-3 py-2 text-xs font-bold font-sans uppercase rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
+                      theme === 'cyberpunk-light'
+                        ? 'bg-cyan-400/20 border-cyan-400 text-cyan-900 dark:text-cyan-300 font-extrabold shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                        : theme === 'cyberpunk'
+                          ? 'bg-slate-900 border-[#00f0ff] text-[#00f0ff] shadow-[0_0_15px_rgba(0,240,255,0.3)]'
+                          : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 shadow-xs'
+                    }`}
+                    title="Toggle between Cyberpunk Dark and Cyberpunk Light modes for this view"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-cyan-400 animate-bounce" />
+                    <span>{theme === 'cyberpunk-light' ? 'Cyberpunk Light' : 'Cyberpunk Dark'}</span>
+                  </button>
+
                   <button
                     onClick={handlePrintCatalog}
                     className={`px-3 py-2 text-xs font-bold font-sans uppercase rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
@@ -6466,7 +6591,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Secondary Filter Bar below Print Catalog controls */}
+              {/* Secondary Filter Bar with Zoom Range Slider & Low Stock Warnings Toggle */}
               <div 
                 className={`flex flex-wrap items-center justify-between gap-3 p-3 px-4 rounded-2xl border transition-all ${
                   theme === 'day'
@@ -6476,52 +6601,101 @@ export default function App() {
                       : 'bg-slate-900/40 border-slate-800'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 flex-wrap">
                   <span className={`text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5 ${
                     theme === 'day' ? 'text-slate-500' : 'text-slate-400'
                   }`}>
                     <Filter className="w-3.5 h-3.5 text-pink-400" />
                     <span>Quick Filters:</span>
                   </span>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { id: 'all', label: 'All Products', icon: '🌐', count: products.length },
+                      { id: 'low-stock', label: 'Low Stock', icon: '⚠️', count: products.filter(p => (p.stock !== undefined ? p.stock : 0) < 15).length },
+                      { id: 'high-demand', label: 'High Demand', icon: '🔥', count: products.filter(p => (p.salesCount !== undefined && p.salesCount >= 15) || (p.rating !== undefined && p.rating >= 4.8)).length },
+                      { id: 'new-arrivals', label: 'New', icon: '✨', count: products.filter(p => p.isNew || p.id === '1' || p.id === '3' || p.id === '5' || (p.stock !== undefined && p.stock % 3 === 0)).length }
+                    ].map((pill) => {
+                      const isSelected = catalogTagFilter === pill.id;
+                      return (
+                        <button
+                          key={pill.id}
+                          onClick={() => {
+                            setCatalogTagFilter(pill.id as any);
+                            triggerToast(`Catalog filter updated: ${pill.label}`, "success");
+                          }}
+                          className={`px-3 py-1 rounded-full text-xs font-bold font-sans transition-all duration-300 cursor-pointer flex items-center gap-1.5 border ${
+                            isSelected
+                              ? theme === 'cyberpunk'
+                                ? 'bg-gradient-to-r from-pink-500 to-purple-600 border-pink-400 text-white shadow-[0_0_12px_#ec4899] scale-105 ring-2 ring-pink-500/40'
+                                : 'bg-indigo-600 border-indigo-500 text-white dark:bg-slate-100 dark:border-slate-100 dark:text-slate-950 scale-105 ring-2 ring-indigo-500/30'
+                              : theme === 'day'
+                                ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300'
+                                : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
+                          }`}
+                        >
+                          <span>{pill.icon}</span>
+                          <span>{pill.label}</span>
+                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-black ${
+                            isSelected
+                              ? 'bg-white/20 text-white dark:bg-slate-900/30 dark:text-slate-900'
+                              : 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+                          }`}>
+                            {pill.count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {[
-                    { id: 'all', label: 'All Products', icon: '🌐', count: products.length },
-                    { id: 'low-stock', label: 'Low Stock', icon: '⚠️', count: products.filter(p => (p.stock !== undefined ? p.stock : 0) < 15).length },
-                    { id: 'high-demand', label: 'High Demand', icon: '🔥', count: products.filter(p => (p.salesCount !== undefined && p.salesCount >= 15) || (p.rating !== undefined && p.rating >= 4.8)).length },
-                    { id: 'new-arrivals', label: 'New', icon: '✨', count: products.filter(p => p.isNew || p.id === '1' || p.id === '3' || p.id === '5' || (p.stock !== undefined && p.stock % 3 === 0)).length }
-                  ].map((pill) => {
-                    const isSelected = catalogTagFilter === pill.id;
-                    return (
-                      <button
-                        key={pill.id}
-                        onClick={() => {
-                          setCatalogTagFilter(pill.id as any);
-                          triggerToast(`Catalog filter updated: ${pill.label}`, "success");
-                        }}
-                        className={`px-3.5 py-1.5 rounded-full text-xs font-bold font-sans transition-all duration-300 cursor-pointer flex items-center gap-2 border ${
-                          isSelected
-                            ? theme === 'cyberpunk'
-                              ? 'bg-gradient-to-r from-pink-500 to-purple-600 border-pink-400 text-white shadow-[0_0_12px_#ec4899] scale-105 ring-2 ring-pink-500/40'
-                              : 'bg-indigo-600 border-indigo-500 text-white dark:bg-slate-100 dark:border-slate-100 dark:text-slate-950 scale-105 ring-2 ring-indigo-500/30'
-                            : theme === 'day'
-                              ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300'
-                              : 'bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
-                        }`}
-                      >
-                        <span>{pill.icon}</span>
-                        <span>{pill.label}</span>
-                        <span className={`px-2 py-0.2 rounded-full text-[10px] font-mono font-black ${
-                          isSelected
-                            ? 'bg-white/20 text-white dark:bg-slate-900/30 dark:text-slate-900'
-                            : 'bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
-                        }`}>
-                          {pill.count}
-                        </span>
-                      </button>
-                    );
-                  })}
+                {/* Dynamic Controls: Zoom Range Slider & Low Stock Alert Checkbox */}
+                <div className="flex items-center gap-4 flex-wrap ml-auto pt-1 sm:pt-0">
+                  {/* Zoom Range Slider */}
+                  <div className={`flex items-center gap-2 border px-3 py-1 rounded-full ${
+                    theme === 'day' ? 'bg-white border-slate-200' : 'bg-slate-900/90 border-slate-800'
+                  }`}>
+                    <Maximize2 className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">Card Scale:</span>
+                    <input
+                      id="catalog-card-zoom-slider"
+                      type="range"
+                      min="0.75"
+                      max="1.3"
+                      step="0.05"
+                      value={catalogCardZoom}
+                      onChange={(e) => setCatalogCardZoom(parseFloat(e.target.value))}
+                      className="w-20 sm:w-24 accent-pink-500 cursor-pointer"
+                      title="Adjust product card scale"
+                    />
+                    <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/20">
+                      {Math.round(catalogCardZoom * 100)}%
+                    </span>
+                  </div>
+
+                  {/* Low-stock warning checkbox */}
+                  <label className={`flex items-center gap-2 border px-3 py-1 rounded-full cursor-pointer select-none text-xs font-mono font-bold transition-all ${
+                    showLowStockWarnings
+                      ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.15)]'
+                      : theme === 'day'
+                        ? 'bg-white border-slate-200 text-slate-500'
+                        : 'bg-slate-900/80 border-slate-800 text-slate-500'
+                  }`}>
+                    <input
+                      id="toggle-low-stock-warnings-checkbox"
+                      type="checkbox"
+                      checked={showLowStockWarnings}
+                      onChange={(e) => {
+                        setShowLowStockWarnings(e.target.checked);
+                        triggerToast(
+                          e.target.checked ? "Low stock warnings & shake enabled" : "Low stock warnings & shake disabled",
+                          "info"
+                        );
+                      }}
+                      className="rounded accent-rose-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span className="text-[10px] font-bold uppercase tracking-wider">⚠️ Stock Alerts & Shake</span>
+                  </label>
                 </div>
               </div>
 
@@ -6709,7 +6883,8 @@ export default function App() {
                   }}
                   initial="hidden"
                   animate="show"
-                  className="grid grid-cols-[repeat(auto-fit,minmax(270px,1fr))] gap-6"
+                  style={{ gridTemplateColumns: `repeat(auto-fit, minmax(${Math.round(270 * catalogCardZoom)}px, 1fr))` }}
+                  className="grid gap-6 transition-all duration-300"
                 >
                   {isSyncingCatalog ? (
                     Array.from({ length: 6 }).map((_, idx) => (
@@ -6751,6 +6926,7 @@ export default function App() {
                       return (
                       <motion.div
                         id={`product-card-container-${p.id}`}
+                        data-catalog-card="true"
                         key={p.id}
                         variants={{
                           hidden: { opacity: 0, y: 30 },
@@ -6786,7 +6962,7 @@ export default function App() {
                         }}
                         onDragEnd={() => setDraggedId(null)}
                         layout
-                        className={`transition-all duration-300 rounded-3xl group ${
+                        className={`transition-all duration-300 rounded-3xl group catalog-card-pulse ${
                           draggedId === p.id 
                             ? 'opacity-40 scale-95 border-dashed border-[#00f0ff]' 
                             : ''
@@ -6824,6 +7000,26 @@ export default function App() {
                           )}
 
 
+
+                          {/* Batch Edit Mode checkbox overlay */}
+                          {isBatchEditActive && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setBatchEditSelectedIds(prev => 
+                                  prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id]
+                                );
+                              }}
+                              className={`absolute top-4 right-4 z-30 p-2.5 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-xl ${
+                                batchEditSelectedIds.includes(p.id)
+                                  ? 'bg-pink-600 border-pink-400 text-white shadow-[0_0_15px_#ec4899] scale-110 ring-2 ring-pink-400'
+                                  : 'bg-slate-900/90 border-slate-700 text-slate-400 hover:border-pink-500 hover:text-white'
+                              }`}
+                              title={batchEditSelectedIds.includes(p.id) ? "Deselect for batch edit" : "Select for batch edit"}
+                            >
+                              <CheckSquare className={`w-4 h-4 ${batchEditSelectedIds.includes(p.id) ? 'text-white' : 'text-slate-400'}`} />
+                            </button>
+                          )}
 
                           {/* Wishlist toggle button */}
                           <button
@@ -7064,7 +7260,7 @@ export default function App() {
                                 const isAnimating = stockInfo && (Date.now() - stockInfo.timestamp < 2500);
                                 const isIncrease = stockInfo?.type === 'increase';
                                 const currentStockVal = p.stock !== undefined ? p.stock : 0;
-                                const isCriticalStock = currentStockVal < 5;
+                                const isCriticalStock = showLowStockWarnings && currentStockVal < 5;
 
                                 return (
                                   <span 
@@ -7134,6 +7330,74 @@ export default function App() {
                             {stockHistoryActive[p.id] && (
                               <StockHistoryChart productId={p.id} theme={theme} />
                             )}
+
+                            {/* Render 30-Day Inventory Trend Sparkline Chart */}
+                            {showInventoryTrends && (() => {
+                              const stockData = get30DayStockHistory(p.id, p.stock !== undefined ? p.stock : 10);
+                              const minVal = Math.min(...stockData.map(d => d.stock));
+                              const maxVal = Math.max(...stockData.map(d => d.stock));
+                              const firstVal = stockData[0].stock;
+                              const lastVal = stockData[stockData.length - 1].stock;
+                              const pctChange = Math.round(((lastVal - firstVal) / Math.max(1, firstVal)) * 100);
+
+                              return (
+                                <div className={`mt-2 p-2.5 rounded-2xl border transition-all ${
+                                  theme === 'day'
+                                    ? 'bg-slate-50 border-slate-200'
+                                    : 'bg-slate-950/80 border-cyan-500/30'
+                                }`}>
+                                  <div className="flex items-center justify-between text-[10px] font-mono mb-1">
+                                    <span className="font-bold flex items-center gap-1 text-cyan-400">
+                                      <Activity className="w-3 h-3 text-cyan-400 animate-pulse" />
+                                      <span>30-Day Inventory Trend</span>
+                                    </span>
+                                    <span className={`font-black px-1.5 py-0.2 rounded text-[9px] ${
+                                      pctChange >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                                    }`}>
+                                      {pctChange >= 0 ? `+${pctChange}%` : `${pctChange}%`}
+                                    </span>
+                                  </div>
+                                  <div className="h-10 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                      <AreaChart data={stockData} margin={{ top: 2, right: 2, left: 2, bottom: 2 }}>
+                                        <defs>
+                                          <linearGradient id={`trend-grad-${p.id}`} x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor={pctChange >= 0 ? "#00f0ff" : "#f43f5e"} stopOpacity={0.6}/>
+                                            <stop offset="95%" stopColor={pctChange >= 0 ? "#00f0ff" : "#f43f5e"} stopOpacity={0.0}/>
+                                          </linearGradient>
+                                        </defs>
+                                        <Tooltip
+                                          content={({ active, payload }) => {
+                                            if (active && payload && payload.length) {
+                                              return (
+                                                <div className="bg-slate-900 border border-cyan-500/50 text-white text-[9px] p-1 px-1.5 rounded font-mono shadow-lg">
+                                                  <div>{payload[0].payload.day}</div>
+                                                  <div className="font-bold text-cyan-400">Stock: {payload[0].value} units</div>
+                                                </div>
+                                              );
+                                            }
+                                            return null;
+                                          }}
+                                        />
+                                        <Area
+                                          type="monotone"
+                                          dataKey="stock"
+                                          stroke={pctChange >= 0 ? "#00f0ff" : "#f43f5e"}
+                                          strokeWidth={2}
+                                          fillOpacity={1}
+                                          fill={`url(#trend-grad-${p.id})`}
+                                        />
+                                      </AreaChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                  <div className="flex justify-between text-[9px] font-mono text-slate-400 mt-1 px-0.5">
+                                    <span>Min: <strong className="text-slate-200">{minVal}</strong></span>
+                                    <span>Current: <strong className="text-cyan-400">{lastVal}</strong></span>
+                                    <span>Max: <strong className="text-slate-200">{maxVal}</strong></span>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                             {/* Stock level visual progress indicator deleted based on user directive */}
                           </div>
 
@@ -7222,6 +7486,168 @@ export default function App() {
                   }))}
                 </motion.div>
               )}
+
+              {/* Floating Batch Edit Mode Toolbar */}
+              <AnimatePresence>
+                {isBatchEditActive && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 60, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 60, scale: 0.95 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                    className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-50 p-4 rounded-2xl border shadow-2xl max-w-3xl w-[94vw] flex flex-wrap items-center justify-between gap-3 backdrop-blur-xl ${
+                      theme === 'cyberpunk'
+                        ? 'bg-slate-950/95 border-pink-500/80 text-white shadow-[0_0_35px_rgba(236,72,153,0.35)]'
+                        : theme === 'day'
+                          ? 'bg-white/95 border-slate-300 text-slate-900 shadow-2xl'
+                          : 'bg-slate-900/95 border-slate-700 text-white shadow-2xl'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-pink-500/20 text-pink-400 border border-pink-500/30">
+                        <Edit3 className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider font-mono flex items-center gap-2">
+                          <span>Batch Edit Mode</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] bg-pink-500 text-white font-bold">
+                            {batchEditSelectedIds.length} Selected
+                          </span>
+                        </h4>
+                        <p className="text-[10px] text-slate-400 font-mono">
+                          Update category, price, or tags for selected items simultaneously
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap ml-auto">
+                      <button
+                        onClick={() => {
+                          if (batchEditSelectedIds.length === filteredProducts.length) {
+                            setBatchEditSelectedIds([]);
+                          } else {
+                            setBatchEditSelectedIds(filteredProducts.map(p => p.id));
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 cursor-pointer"
+                      >
+                        {batchEditSelectedIds.length === filteredProducts.length ? 'Deselect All' : 'Select All'}
+                      </button>
+
+                      {/* Category Selector */}
+                      <select
+                        value={batchCategoryInput}
+                        onChange={(e) => setBatchCategoryInput(e.target.value)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border outline-none cursor-pointer ${
+                          theme === 'day' ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-900 border-slate-700 text-slate-200'
+                        }`}
+                      >
+                        <option value="">-- Set Category --</option>
+                        <option value="Laptops">Laptops</option>
+                        <option value="Smartphones">Smartphones</option>
+                        <option value="Accessories">Accessories</option>
+                        <option value="Gaming">Gaming</option>
+                        <option value="Audio">Audio</option>
+                        <option value="Wearables">Wearables</option>
+                        <option value="Components">Components</option>
+                      </select>
+
+                      {/* Custom Price Tag / Badge */}
+                      <input
+                        type="text"
+                        placeholder="Tag (e.g. Sale $99)"
+                        value={batchTagInput}
+                        onChange={(e) => setBatchTagInput(e.target.value)}
+                        className={`w-32 px-2.5 py-1.5 rounded-lg text-xs font-mono border outline-none ${
+                          theme === 'day' ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-900 border-slate-700 text-slate-200'
+                        }`}
+                      />
+
+                      {/* Price Input */}
+                      <input
+                        type="number"
+                        placeholder="New Price $"
+                        value={batchPriceInput}
+                        onChange={(e) => setBatchPriceInput(e.target.value)}
+                        className={`w-28 px-2.5 py-1.5 rounded-lg text-xs font-mono border outline-none ${
+                          theme === 'day' ? 'bg-slate-100 border-slate-300 text-slate-800' : 'bg-slate-900 border-slate-700 text-slate-200'
+                        }`}
+                      />
+
+                      {/* Apply Batch Changes */}
+                      <button
+                        disabled={batchEditSelectedIds.length === 0}
+                        onClick={() => {
+                          if (batchEditSelectedIds.length === 0) return;
+                          setProducts(prev => prev.map(p => {
+                            if (batchEditSelectedIds.includes(p.id)) {
+                              return {
+                                ...p,
+                                ...(batchCategoryInput ? { category: batchCategoryInput } : {}),
+                                ...(batchTagInput ? { customBadge: batchTagInput } : {}),
+                                ...(batchPriceInput && !isNaN(parseFloat(batchPriceInput)) ? { price: parseFloat(batchPriceInput) } : {})
+                              };
+                            }
+                            return p;
+                          }));
+                          triggerToast(`Updated ${batchEditSelectedIds.length} items simultaneously!`, "success");
+                          setBatchEditSelectedIds([]);
+                          setBatchCategoryInput('');
+                          setBatchTagInput('');
+                          setBatchPriceInput('');
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono uppercase transition-all cursor-pointer ${
+                          batchEditSelectedIds.length > 0
+                            ? 'bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white shadow-lg shadow-pink-500/30 hover:scale-105'
+                            : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                        }`}
+                      >
+                        Apply Batch
+                      </button>
+
+                      {/* Exit Batch Edit */}
+                      <button
+                        onClick={() => {
+                          setIsBatchEditActive(false);
+                          setBatchEditSelectedIds([]);
+                          triggerToast("Exited Batch Edit Mode", "info");
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer transition-colors"
+                        title="Exit Batch Edit Mode"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Floating Return-To-Top Action Button for #products-grid-catalog */}
+              <AnimatePresence>
+                {showCatalogTopBtn && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.7, y: 20 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.7, y: 20 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    onClick={() => {
+                      document.getElementById('products-grid-catalog')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className={`fixed bottom-6 right-6 z-50 p-3.5 rounded-full shadow-2xl border cursor-pointer flex items-center gap-2 group transition-all duration-300 ${
+                      theme === 'cyberpunk'
+                        ? 'bg-slate-900/95 border-[#00f0ff] text-[#00f0ff] hover:bg-[#00f0ff] hover:text-slate-950 shadow-[0_0_25px_rgba(0,240,255,0.5)] ring-2 ring-[#00f0ff]/30'
+                        : theme === 'day'
+                          ? 'bg-white border-slate-300 text-slate-800 hover:bg-slate-900 hover:text-white hover:border-slate-900 shadow-2xl ring-2 ring-slate-200'
+                          : 'bg-slate-900/95 border-pink-500/50 text-pink-400 hover:bg-pink-500 hover:text-white shadow-2xl ring-2 ring-pink-500/20'
+                    }`}
+                    title="Return to top of catalog"
+                    aria-label="Return to catalog top"
+                  >
+                    <ArrowUp className="w-5 h-5 transition-transform duration-300 group-hover:-translate-y-1" />
+                    <span className="text-xs font-black font-mono uppercase tracking-wider pr-1 hidden sm:inline">Top</span>
+                  </motion.button>
+                )}
+              </AnimatePresence>
             </motion.section>
 
             {/* PLATFORM SHARE SECTION AT THE BOTTOM OF THE STOREFRONT */}

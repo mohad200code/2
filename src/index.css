@@ -145,6 +145,43 @@ html {
   transition: color 0.5s ease-in-out, background-color 0.5s ease-in-out, border-color 0.5s ease-in-out;
 }
 
+/* Gentle pulse animation on product cards within #products-grid-catalog when hovered to highlight availability */
+@keyframes card-availability-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.4), 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 22px 5px rgba(0, 240, 255, 0.35), 0 15px 35px -5px rgba(0, 240, 255, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 240, 255, 0), 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  }
+}
+
+@keyframes card-availability-pulse-day {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.35), 0 8px 25px -5px rgba(0, 0, 0, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(79, 70, 229, 0.3), 0 12px 30px -5px rgba(79, 70, 229, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0), 0 8px 25px -5px rgba(0, 0, 0, 0.08);
+  }
+}
+
+#products-grid-catalog .catalog-card-pulse:hover,
+#products-grid-catalog [data-catalog-card="true"]:hover {
+  animation: card-availability-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+  border-color: rgba(0, 240, 255, 0.6) !important;
+}
+
+.day #products-grid-catalog .catalog-card-pulse:hover,
+.day #products-grid-catalog [data-catalog-card="true"]:hover {
+  animation: card-availability-pulse-day 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+  border-color: rgba(79, 70, 229, 0.5) !important;
+}
+
 /* Elegant, solid pure black text for maximum readability in Day Mode */
 
 /* Specific interactive scale-up hover animation for all cards */

@@ -615,6 +615,48 @@ export const ClerkAuth: React.FC<ClerkAuthProps> = ({ onSuccess, onClose, onGoog
 
               <div className="space-y-6">
                 
+                {/* Social Login Provider Grid */}
+                <div className="space-y-3">
+                  <p className={`text-[10px] font-bold uppercase tracking-wider text-center ${labelClass}`}>
+                    Import or Sign In with Social Providers
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {socialLogins.map((provider) => (
+                      <button
+                        key={provider.name}
+                        type="button"
+                        onClick={() => {
+                          if (provider.name === 'Google' && onGoogleAuth) {
+                            onGoogleAuth();
+                          } else {
+                            setSocialPopup({
+                              provider: provider.name,
+                              email: `user.${provider.name.toLowerCase()}@sdazum.com`,
+                              name: `Sdazum ${provider.name} Operator`,
+                            });
+                          }
+                        }}
+                        className={`p-2.5 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer hover:scale-[1.03] active:scale-95 ${
+                          theme === 'night'
+                            ? 'bg-slate-900 border-slate-800 text-slate-200 hover:border-indigo-500 hover:bg-slate-800'
+                            : theme === 'cyberpunk'
+                              ? 'bg-[#0a0311] border-[#00f0ff]/30 text-[#00f0ff] hover:border-[#00f0ff] hover:shadow-[0_0_10px_#00f0ff]'
+                              : 'bg-white border-slate-200 text-slate-700 hover:border-slate-400 hover:bg-slate-50 shadow-xs'
+                        }`}
+                        title={`Import account using ${provider.name}`}
+                      >
+                        <div className="shrink-0">{provider.icon}</div>
+                        <span className="text-[10px] font-bold font-mono">{provider.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="relative flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center"><div className={`w-full border-t ${theme === 'night' ? 'border-slate-800' : theme === 'cyberpunk' ? 'border-[#00f0ff]/20' : 'border-slate-200'}`}></div></div>
+                  <span className={`relative px-3 text-[10px] font-bold uppercase tracking-wider ${theme === 'night' ? 'bg-[#0f172a] text-slate-500' : theme === 'cyberpunk' ? 'bg-black text-[#00f0ff]/60' : 'bg-slate-50 text-slate-400'}`}>Or continue with email</span>
+                </div>
+
                 {/* Email input form */}
                 <form id="clerk-form" onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-1.5">
